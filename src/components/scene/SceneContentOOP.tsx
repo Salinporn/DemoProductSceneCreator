@@ -5,7 +5,6 @@ import { Environment, PerspectiveCamera } from "@react-three/drei";
 import { useXRStore, useXR } from "@react-three/xr";
 import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
-
 import { CatalogToggle } from "../panel/furniture/FurnitureCatalogToggle";
 import { VRInstructionPanel } from "../panel/VRInstructionPanel";
 import { VRFurniturePanel } from "../panel/furniture/FurniturePanel";
@@ -14,12 +13,11 @@ import { HeadLockedUI } from "../panel/common/HeadLockedUI";
 import { VRControlPanel } from "../panel/control/ControlPanel";
 import { ControlPanelToggle } from "../panel/control/ControlPanelToggle";
 import { VRNotificationPanel } from "../panel/common/NotificationPanel";
-
+import { VRPreciseCollisionPanel } from "../panel/furniture/VRPreciseCollisionPanel";
 import { SceneManager } from "../../three/managers/SceneManager";
 import { FurnitureItem, FurnitureMetadata } from "../../three/objects/FurnitureItem";
 import { HomeModel } from "../../three/objects/HomeModel";
 import { NavigationController, FurnitureEditController } from "../../three/controllers/XRControllerBase";
-
 import { makeAuthenticatedRequest, logout } from "../../utils/Auth";
 
 const DIGITAL_HOME_PLATFORM_BASE_URL = import.meta.env.VITE_DIGITAL_HOME_PLATFORM_URL;
@@ -46,10 +44,12 @@ export function SceneContentOOP({ homeId, digitalHome }: SceneContentProps) {
   const xr = useXR();
   const xrStore = useXRStore();
   
+  // OOP Managers and Controllers
   const sceneManagerRef = useRef<SceneManager | null>(null);
   const navigationControllerRef = useRef<NavigationController | null>(null);
   const furnitureControllerRef = useRef<FurnitureEditController | null>(null);
   
+  // UI
   const [showSlider, setShowSlider] = useState(false);
   const [showFurniture, setShowFurniture] = useState(false);
   const [showInstructions, setShowInstructions] = useState(true);
@@ -57,20 +57,36 @@ export function SceneContentOOP({ homeId, digitalHome }: SceneContentProps) {
   const [showNotification, setShowNotification] = useState(false);
   const [notificationMessage, setNotificationMessage] = useState("");
   const [notificationType, setNotificationType] = useState<"success" | "error" | "info">("info");
+
+  const [showMoveCloserPanel, setShowMoveCloserPanel] = useState(false);
+  const [showPreciseCheckPanel, setShowPreciseCheckPanel] = useState(false);
+  const [preciseCheckInProgress, setPreciseCheckInProgress] = useState(false);
   
+  const pendingMoveRef = useRef<[number, number, number] | null>(null);
+  const currentAABBPositionRef = useRef<[number, number, number] | null>(null);
+  
+  // Scene
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const [navigationMode, setNavigationMode] = useState(false);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   
+  // Slider
   const [sliderValue, setSliderValue] = useState(1.0);
   const [rotationValue, setRotationValue] = useState(0);
   
+  // Furniture catalog
   const [furnitureCatalog, setFurnitureCatalog] = useState<any[]>([]);
   const [catalogLoading, setCatalogLoading] = useState(false);
   const [modelUrlCache, setModelUrlCache] = useState<Map<number, string>>(new Map());
 
-  const uiLocked = showFurniture || showControlPanel || showInstructions || showSlider || showNotification;
+  const uiLocked = showFurniture || 
+    showControlPanel || 
+    showInstructions || 
+    showSlider || 
+    showNotification ||
+    showMoveCloserPanel ||
+    showPreciseCheckPanel;
 
   const showNotificationMessage = (message: string, type: "success" | "error" | "info" = "info") => {
     setShowControlPanel(false);
@@ -117,7 +133,32 @@ export function SceneContentOOP({ homeId, digitalHome }: SceneContentProps) {
             currentPos[2] + delta.z,
           ];
 
-          await sceneManager.moveFurniture(id, newPos);
+          const isInAABBZone = currentAABBPositionRef.current !== null;
+
+          const result = await sceneManager.moveFurniture(
+            id, 
+            newPos, 
+            isInAABBZone,
+            false
+          );
+          
+          if (!result.success && result.needsConfirmation) {
+            pendingMoveRef.current = newPos;
+            setShowMoveCloserPanel(true);
+            
+          } else if (result.success && result.needsPreciseCheck) {
+            currentAABBPositionRef.current = newPos;
+            setShowPreciseCheckPanel(true);
+            
+          } else if (!result.success && !result.needsConfirmation) {
+            if (result.reason) {
+              showNotificationMessage(`⚠️ ${result.reason}`, 'error');
+            }
+            currentAABBPositionRef.current = null;
+            
+          } else if (result.success && !result.needsPreciseCheck) {
+            currentAABBPositionRef.current = null;
+          }
         },
         onFurnitureRotate: (id, deltaY) => {
           const furniture = sceneManager.getFurniture(id);
@@ -132,6 +173,7 @@ export function SceneContentOOP({ homeId, digitalHome }: SceneContentProps) {
 
           sceneManager.rotateFurniture(id, newRot);
           
+          // Update rotation slider
           const twoPi = Math.PI * 2;
           let normalizedRotation = newRot[1] % twoPi;
           if (normalizedRotation < 0) normalizedRotation += twoPi;
@@ -141,6 +183,8 @@ export function SceneContentOOP({ homeId, digitalHome }: SceneContentProps) {
           sceneManager.deselectFurniture(id);
           setSelectedItemId(null);
           setShowSlider(false);
+          currentAABBPositionRef.current = null;
+          pendingMoveRef.current = null;
         },
       }
     );
@@ -168,6 +212,7 @@ export function SceneContentOOP({ homeId, digitalHome }: SceneContentProps) {
     navigationControllerRef.current.setRig(rig);
   }, [xr.session, scene, camera]);
 
+  // Load Home Model
   useEffect(() => {
     const loadHome = async () => {
       if (!sceneManagerRef.current) return;
@@ -197,6 +242,7 @@ export function SceneContentOOP({ homeId, digitalHome }: SceneContentProps) {
     loadHome();
   }, [homeId, digitalHome]);
 
+  // Load furniture catalog
   useEffect(() => {
     const loadFurnitureCatalog = async () => {
       setCatalogLoading(true);
@@ -218,6 +264,7 @@ export function SceneContentOOP({ homeId, digitalHome }: SceneContentProps) {
 
           setFurnitureCatalog(items);
 
+          // Preload models
           for (const item of items) {
             await loadFurnitureModel(item.model_id);
           }
@@ -236,6 +283,7 @@ export function SceneContentOOP({ homeId, digitalHome }: SceneContentProps) {
     };
   }, []);
 
+  // Load furniture model helper
   const loadFurnitureModel = async (modelId: number) => {
     if (modelUrlCache.has(modelId)) return;
 
@@ -251,6 +299,7 @@ export function SceneContentOOP({ homeId, digitalHome }: SceneContentProps) {
     }
   };
 
+  // Load deployed items
   useEffect(() => {
     const loadDeployedItems = async () => {
       if (!sceneManagerRef.current || modelUrlCache.size === 0) return;
@@ -292,10 +341,10 @@ export function SceneContentOOP({ homeId, digitalHome }: SceneContentProps) {
             await sceneManagerRef.current.addFurniture(furniture);
           }
           
+          // Initial collision check
           if (sceneManagerRef.current) {
             setTimeout(async () => {
               await sceneManagerRef.current!.updateAllCollisions();
-              console.log('✅ All collisions updated after loading');
             }, 200);
           }
         }
@@ -311,17 +360,21 @@ export function SceneContentOOP({ homeId, digitalHome }: SceneContentProps) {
     }
   }, [homeId, modelUrlCache.size]);
 
+  // Update loop - run controllers
   useFrame((_state, delta) => {
     const session = xr.session;
     if (!session) return;
 
+    // Update navigation
     navigationControllerRef.current?.update(session, camera, delta);
 
+    // Update furniture controller when not navigating
     if (!navigationMode && selectedItemId && furnitureControllerRef.current) {
       furnitureControllerRef.current.update(session, camera, delta);
     }
   });
 
+  // UI Handlers
   const handleToggleUI = () => {
     if (showControlPanel) {
       setShowControlPanel(false);
@@ -407,6 +460,79 @@ export function SceneContentOOP({ homeId, digitalHome }: SceneContentProps) {
     window.location.href = DIGITAL_HOME_PLATFORM_BASE_URL;
   };
 
+  const handleConfirmMoveCloser = async () => {
+    if (!selectedItemId || !sceneManagerRef.current || !pendingMoveRef.current) return;
+    
+    setShowMoveCloserPanel(false);
+    
+    const result = await sceneManagerRef.current.moveFurniture(
+      selectedItemId,
+      pendingMoveRef.current,
+      true,
+      false
+    );
+    
+    if (result.success && result.needsPreciseCheck) {
+      currentAABBPositionRef.current = pendingMoveRef.current;
+      pendingMoveRef.current = null;
+      setShowPreciseCheckPanel(true);
+    }
+  };
+
+  const handleCancelMoveCloser = () => {
+    setShowMoveCloserPanel(false);
+    pendingMoveRef.current = null;
+  };
+
+  const handleConfirmPreciseCheck = async () => {
+    if (!selectedItemId || !sceneManagerRef.current || !currentAABBPositionRef.current) return;
+    
+    setPreciseCheckInProgress(true);
+    setShowPreciseCheckPanel(false);
+    
+    try {
+      
+      // Perform API check on current position
+      const result = await sceneManagerRef.current.moveFurniture(
+        selectedItemId,
+        currentAABBPositionRef.current,
+        true,
+        true
+      );
+      
+      if (!result.success) {
+        showNotificationMessage('⚠️ Precise overlap detected! Furniture moved back to safe position.', 'error');
+        currentAABBPositionRef.current = null; // Reset
+      } else {
+        showNotificationMessage('✅ Position validated! Furniture can stay here.', 'success');
+      }
+    } catch (error) {
+      console.error('Error during precise collision check:', error);
+      showNotificationMessage('❌ Error checking collision. Please try again.', 'error');
+    } finally {
+      setPreciseCheckInProgress(false);
+    }
+  };
+
+  const handleCancelPreciseCheck = () => {
+    if (!selectedItemId || !sceneManagerRef.current) return;
+    
+    // Revert to last valid position (outside AABB)
+    const lastValid = sceneManagerRef.current.getLastValidPosition(selectedItemId);
+    if (lastValid) {
+      const furniture = sceneManagerRef.current.getFurniture(selectedItemId);
+      if (furniture) {
+        furniture.setPosition(lastValid);
+        const collisionDetector = sceneManagerRef.current.getCollisionDetector();
+        collisionDetector.updateFurnitureBox(selectedItemId, furniture.getGroup(), furniture.getModelId());
+        furniture.setCollision(false);
+      }
+    }
+    
+    setShowPreciseCheckPanel(false);
+    currentAABBPositionRef.current = null;
+  };
+
   const handleSelectFurniture = (f: any) => {
     if (!sceneManagerRef.current) return;
 
@@ -432,7 +558,6 @@ export function SceneContentOOP({ homeId, digitalHome }: SceneContentProps) {
     // Add new furniture
     const modelPath = modelUrlCache.get(f.model_id);
     if (!modelPath) {
-      console.warn('Model not loaded yet for:', f.name);
       return;
     }
 
@@ -465,8 +590,6 @@ export function SceneContentOOP({ homeId, digitalHome }: SceneContentProps) {
       setSelectedItemId(uniqueId);
       furnitureControllerRef.current?.setSelectedFurniture(uniqueId);
       
-      newFurniture['lastValidPosition'] = [...spawnPos] as [number, number, number];
-      
       setRotationValue(0);
       setShowSlider(true);
       setShowFurniture(false);
@@ -481,6 +604,7 @@ export function SceneContentOOP({ homeId, digitalHome }: SceneContentProps) {
       setSelectedItemId(null);
       setShowSlider(false);
       furnitureControllerRef.current?.setSelectedFurniture(null);
+      currentAABBPositionRef.current = null;
       return;
     }
 
@@ -492,9 +616,6 @@ export function SceneContentOOP({ homeId, digitalHome }: SceneContentProps) {
 
     const furniture = sceneManagerRef.current.getFurniture(id);
     if (furniture) {
-      const currentPos = furniture.getPosition();
-      furniture['lastValidPosition'] = [...currentPos] as [number, number, number];
-      
       const rotation = furniture.getRotation();
       const scale = furniture.getScale();
       
@@ -526,6 +647,7 @@ export function SceneContentOOP({ homeId, digitalHome }: SceneContentProps) {
     }
   };
 
+  // Get placed furniture IDs for catalog
   const placedCatalogIds = React.useMemo(() => {
     if (!sceneManagerRef.current) return [];
     return sceneManagerRef.current.getAllFurniture().map(item => item.getId().split('-')[0]);
@@ -558,12 +680,10 @@ export function SceneContentOOP({ homeId, digitalHome }: SceneContentProps) {
       <group position={[0, 0, 0]}>
         {sceneManagerRef.current && (
           <>
-            {/* Home Model */}
             {sceneManagerRef.current.getHomeModel() && (
               <primitive object={sceneManagerRef.current.getHomeModel()!.getGroup()} />
             )}
             
-            {/* Furniture Items */}
             {sceneManagerRef.current.getAllFurniture().map((furniture) => (
               <primitive
                 key={furniture.getId()}
@@ -644,6 +764,28 @@ export function SceneContentOOP({ homeId, digitalHome }: SceneContentProps) {
             setShowNotification(false);
             setShowControlPanel(true);
           }}
+        />
+      </HeadLockedUI>
+
+      <HeadLockedUI distance={1.5} verticalOffset={0} enabled={showMoveCloserPanel}>
+        <VRPreciseCollisionPanel
+          show={showMoveCloserPanel}
+          onConfirm={handleConfirmMoveCloser}
+          onCancel={handleCancelMoveCloser}
+          isChecking={false}
+          title="Move Furniture Closer?"
+          message="The furniture is close to another object.\n\nDo you want to move it closer?\n(You can decide to check precise collision after)"
+        />
+      </HeadLockedUI>
+
+      <HeadLockedUI distance={1.5} verticalOffset={0} enabled={showPreciseCheckPanel}>
+        <VRPreciseCollisionPanel
+          show={showPreciseCheckPanel}
+          onConfirm={handleConfirmPreciseCheck}
+          onCancel={handleCancelPreciseCheck}
+          isChecking={preciseCheckInProgress}
+          title="Use Precise Collision Detection?"
+          message="Furniture is in collision zone.\n\nRun precise API check to verify overlap?\n(Click No to move back to safe position)"
         />
       </HeadLockedUI>
     </>

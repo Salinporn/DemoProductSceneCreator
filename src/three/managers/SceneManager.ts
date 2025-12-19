@@ -9,6 +9,13 @@ export interface SceneConfig {
   floorLevel?: number;
 }
 
+export interface MoveResult {
+  success: boolean;
+  needsConfirmation: boolean;
+  needsPreciseCheck: boolean;
+  reason?: string;
+}
+
 export class SceneManager {
   protected scene: THREE.Scene;
   protected homeModel: HomeModel | null = null;
@@ -16,6 +23,7 @@ export class SceneManager {
   public collisionDetector: CollisionDetector;
   protected config: Required<SceneConfig>;
   protected selectedItemId: string | null = null;
+  protected lastValidPositions: Map<string, [number, number, number]> = new Map();
 
   constructor(scene: THREE.Scene, config: SceneConfig = {}) {
     this.scene = scene;
@@ -29,7 +37,6 @@ export class SceneManager {
     this.collisionDetector.setDebugMode(this.config.enableDebugMode);
   }
 
-  // Home management
   async setHomeModel(homeModel: HomeModel): Promise<void> {
     if (this.homeModel) {
       this.scene.remove(this.homeModel.getGroup());
@@ -57,7 +64,6 @@ export class SceneManager {
 
   async addFurniture(furniture: FurnitureItem): Promise<boolean> {
     if (this.furnitureItems.has(furniture.getId())) {
-      console.warn(`Furniture with ID ${furniture.getId()} already exists`);
       return false;
     }
 
@@ -90,6 +96,7 @@ export class SceneManager {
     this.furnitureItems.delete(id);
     
     this.collisionDetector.removeFurniture(id);
+    this.lastValidPositions.delete(id); // Clear last valid position
 
     if (this.selectedItemId === id) {
       this.selectedItemId = null;
@@ -158,10 +165,6 @@ export class SceneManager {
 
     const collision = await this.collisionDetector.checkAllCollisions(id);
     furniture.setCollision(collision.hasCollision);
-
-    if (collision.hasCollision) {
-      console.warn(`⚠️ Collision detected for ${furniture.getName()}:`, collision.collidingObjects);
-    }
   }
 
   async updateAllCollisions(): Promise<void> {
@@ -183,40 +186,108 @@ export class SceneManager {
 
   async moveFurniture(
     id: string,
-    newPosition: [number, number, number]
-  ): Promise<boolean> {
+    newPosition: [number, number, number],
+    skipAABBBlock: boolean = false,
+    performPreciseCheck: boolean = false
+  ): Promise<MoveResult> {
     const furniture = this.furnitureItems.get(id);
-    if (!furniture) return false;
+    if (!furniture) return { 
+      success: false, 
+      needsConfirmation: false, 
+      needsPreciseCheck: false,
+      reason: 'Furniture not found' 
+    };
 
     if (!this.config.enableCollisionDetection) {
       furniture.setPosition(newPosition);
-      return true;
+      return { success: true, needsConfirmation: false, needsPreciseCheck: false };
     }
 
     const originalPosition = furniture.getPosition();
     
+    // Save last valid position
+    if (!this.lastValidPositions.has(id)) {
+      this.lastValidPositions.set(id, originalPosition);
+    }
+    
+    // Temporarily move to test position
     furniture.setPosition(newPosition);
     this.collisionDetector.updateFurnitureBox(id, furniture.getGroup(), furniture.getModelId());
     
-    const collision = await this.collisionDetector.checkAllCollisions(id);
-    
-    if (collision.hasCollision) {
-      console.warn('🚫 Collision detected for', furniture.getName(), '- reverting from', newPosition, 'to', originalPosition, 'colliding with:', collision.collidingObjects);
+    const roomCollision = this.collisionDetector.checkRoomCollision(id);
+    if (roomCollision.hasCollision) {
       furniture.setPosition(originalPosition);
       this.collisionDetector.updateFurnitureBox(id, furniture.getGroup(), furniture.getModelId());
       furniture.setCollision(true);
-      return false;
+      return { 
+        success: false, 
+        needsConfirmation: false, 
+        needsPreciseCheck: false,
+        reason: 'Outside room boundary' 
+      };
     }
-
-    furniture.setCollision(false);
     
-    for (const [otherId] of this.furnitureItems) {
-      if (otherId !== id) {
-        await this.updateFurnitureCollision(otherId);
+    const hasAABBCollision = this.collisionDetector.checkAABBCollisionOnly(id);
+    
+    if (hasAABBCollision && !skipAABBBlock) {
+      furniture.setPosition(originalPosition);
+      this.collisionDetector.updateFurnitureBox(id, furniture.getGroup(), furniture.getModelId());
+      furniture.setCollision(true);
+      return { 
+        success: false, 
+        needsConfirmation: true, 
+        needsPreciseCheck: false,
+        reason: 'Close to another object' 
+      };
+    }
+    
+    if (hasAABBCollision && skipAABBBlock && !performPreciseCheck) {
+      furniture.setCollision(true);
+      return { 
+        success: true, 
+        needsConfirmation: false, 
+        needsPreciseCheck: true,
+        reason: 'In AABB collision zone' 
+      };
+    }
+    
+    if (performPreciseCheck) {
+      const preciseCollision = await this.collisionDetector.checkFurnitureCollisions(id);
+      
+      if (preciseCollision.hasCollision) {
+        const lastValid = this.lastValidPositions.get(id) || originalPosition;
+        furniture.setPosition(lastValid);
+        this.collisionDetector.updateFurnitureBox(id, furniture.getGroup(), furniture.getModelId());
+        furniture.setCollision(false);
+        return { 
+          success: false, 
+          needsConfirmation: false, 
+          needsPreciseCheck: false,
+          reason: 'Objects are overlapping' 
+        };
+      } else {
+        this.lastValidPositions.set(id, newPosition);
+        furniture.setCollision(false);
+        return { 
+          success: true, 
+          needsConfirmation: false, 
+          needsPreciseCheck: false 
+        };
       }
     }
 
-    return true;
+    this.lastValidPositions.set(id, newPosition);
+    furniture.setCollision(false);
+    
+    return { success: true, needsConfirmation: false, needsPreciseCheck: false };
+  }
+
+  getLastValidPosition(id: string): [number, number, number] | undefined {
+    return this.lastValidPositions.get(id);
+  }
+
+  clearLastValidPosition(id: string): void {
+    this.lastValidPositions.delete(id);
   }
 
   rotateFurniture(id: string, rotation: [number, number, number]): boolean {

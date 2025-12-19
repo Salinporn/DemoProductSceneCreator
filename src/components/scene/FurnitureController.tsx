@@ -71,10 +71,6 @@ function DraggableFurniture({
       if (onCollisionDetected) {
         onCollisionDetected(collision.hasCollision);
       }
-
-      if (collision.hasCollision) {
-        console.warn('⚠️ Collision detected for', item.name, ':', collision.collidingObjects);
-      }
     };
 
     runCollisionCheck();

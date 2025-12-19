@@ -54,14 +54,6 @@ export class FurnitureItem extends Base3DObject {
     this.modelGroup.add(clonedModel);
   }
 
-  protected onModelLoaded(model: THREE.Group): void {
-    console.log(`✅ Model loaded for ${this.name}`);
-  }
-
-  protected onModelLoadError(error: unknown): void {
-    console.error(`❌ Failed to load model for ${this.name}:`, error);
-  }
-
   getMetadata(): FurnitureMetadata {
     return { ...this.metadata };
   }

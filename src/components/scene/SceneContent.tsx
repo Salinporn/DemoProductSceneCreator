@@ -158,7 +158,6 @@ export function SceneContent({ homeId, digitalHome }: SceneContentProps) {
             const modelPath = modelUrlCache.get(itemData.model_id);
 
             if (!modelPath) {
-              console.warn('Model not loaded for item:', itemId);
               continue;
             }
 
@@ -345,8 +344,6 @@ export function SceneContent({ homeId, digitalHome }: SceneContentProps) {
       });
 
       if (existingIndex !== -1) {
-        console.log("Removing furniture:", f.name);
-
         if (selectedItemIndex === existingIndex) {
           setSelectedItemIndex(null);
           setShowSlider(false);
@@ -359,7 +356,6 @@ export function SceneContent({ homeId, digitalHome }: SceneContentProps) {
 
       const modelPath = modelUrlCache.get(f.model_id);
       if (!modelPath) {
-        console.warn('Model not loaded yet for:', f.name);
         return prev;
       }
 
@@ -372,7 +368,6 @@ export function SceneContent({ homeId, digitalHome }: SceneContentProps) {
       if (collisionDetector['roomBox']) {
         const roomBox = collisionDetector['roomBox'];
         if (!roomBox.containsPoint(spawnPos)) {
-          console.warn('Spawn position outside room, clamping to bounds');
           spawnPos.clamp(roomBox.min, roomBox.max);
         }
       }

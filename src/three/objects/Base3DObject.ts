@@ -94,7 +94,6 @@ export abstract class Base3DObject {
 
   async loadModel(scene: THREE.Scene): Promise<void> {
     if (!this.modelPath) {
-      console.warn(`No model path for ${this.name}`);
       return;
     }
 

@@ -187,9 +187,6 @@ export class CollisionDetector {
     otherItemId: string
   ): Promise<boolean> {
     if (!COLLISION_API_URL) {
-      console.warn(
-        'Model collision API URL not configured; falling back to AABB collision.'
-      );
       return true;
     }
 
@@ -197,9 +194,6 @@ export class CollisionDetector {
     const otherDetails = this.getModelDetails(otherItemId);
 
     if (!mainDetails || !otherDetails) {
-      console.warn(
-        'Missing model details for precise collision check; falling back to AABB collision.'
-      );
       return true;
     }
 
@@ -227,7 +221,6 @@ export class CollisionDetector {
       });
 
       if (!response.ok) {
-        console.warn('Collision API responded with error status:', response.status);
         return true;
       }
 

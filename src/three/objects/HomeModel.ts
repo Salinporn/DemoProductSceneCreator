@@ -61,14 +61,6 @@ export class HomeModel extends Base3DObject {
     this.calculateBoundingBox();
   }
 
-  protected onModelLoaded(model: THREE.Group): void {
-    console.log(`✅ Home model loaded: ${this.name}`);
-  }
-
-  protected onModelLoadError(error: unknown): void {
-    console.error(`❌ Failed to load home model ${this.name}:`, error);
-  }
-
   setBoundary(boundary: Boundary): void {
     this.boundary = boundary;
     this.boundingBox = new THREE.Box3(

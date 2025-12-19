@@ -21,7 +21,7 @@ interface TransformData {
 
 export class CollisionDetector {
   private static instance: CollisionDetector;
-  public furnitureBoxes: Map<string, THREE.Box3> = new Map(); // Made public for sync access
+  public furnitureBoxes: Map<string, THREE.Box3> = new Map();
   private furnitureTransforms: Map<string, TransformData> = new Map();
   private roomBox: THREE.Box3 | null = null;
   private helperMeshes: Map<string, THREE.Mesh> = new Map();
@@ -143,6 +143,23 @@ export class CollisionDetector {
     };
   }
 
+  checkAABBCollisionOnly(itemId: string): boolean {
+    const box = this.furnitureBoxes.get(itemId);
+    
+    if (!box) {
+      return false;
+    }
+
+    for (const [otherId, otherBox] of this.furnitureBoxes.entries()) {
+      if (otherId === itemId) continue;
+      if (box.intersectsBox(otherBox)) {
+        return true; // AABB collision detected
+      }
+    }
+
+    return false;
+  }
+
   async checkFurnitureCollisions(itemId: string): Promise<CollisionResult> {
     const box = this.furnitureBoxes.get(itemId);
     
@@ -157,6 +174,7 @@ export class CollisionDetector {
       if (!box.intersectsBox(otherBox)) continue;
 
       const hasPreciseOverlap = await this.checkModelsOverlapWithApi(itemId, otherId);
+      
       if (hasPreciseOverlap) {
         collidingObjects.push(otherId);
       }
@@ -197,46 +215,6 @@ export class CollisionDetector {
     this.updateFurnitureBox(itemId, object);
 
     return !collision.hasCollision;
-  }
-
-  async findValidPosition(
-    itemId: string,
-    desiredPosition: THREE.Vector3,
-    object: THREE.Object3D,
-    maxAttempts: number = 8
-  ): Promise<THREE.Vector3 | null> {
-    const originalPosition = object.position.clone();
-    object.position.copy(desiredPosition);
-    this.updateFurnitureBox(itemId, object);
-
-    const collision = await this.checkAllCollisions(itemId);
-    if (!collision.hasCollision) {
-      return desiredPosition.clone();
-    }
-
-    const radius = 0.5;
-    const angleStep = (Math.PI * 2) / maxAttempts;
-
-    for (let i = 0; i < maxAttempts; i++) {
-      const angle = angleStep * i;
-      const testPosition = new THREE.Vector3(
-        desiredPosition.x + Math.cos(angle) * radius,
-        desiredPosition.y,
-        desiredPosition.z + Math.sin(angle) * radius
-      );
-
-      object.position.copy(testPosition);
-      this.updateFurnitureBox(itemId, object);
-
-      const testCollision = await this.checkAllCollisions(itemId);
-      if (!testCollision.hasCollision) {
-        return testPosition.clone();
-      }
-    }
-
-    object.position.copy(originalPosition);
-    this.updateFurnitureBox(itemId, object);
-    return null;
   }
 
   constrainToRoom(position: THREE.Vector3, itemBox: THREE.Box3): THREE.Vector3 {
@@ -301,7 +279,6 @@ export class CollisionDetector {
     otherItemId: string
   ): Promise<boolean> {
     if (!COLLISION_API_URL) {
-      console.warn('Model collision API URL not configured; falling back to AABB collision.');
       return true;
     }
 
@@ -309,7 +286,6 @@ export class CollisionDetector {
     const otherDetails = this.getModelDetails(otherItemId);
 
     if (!mainDetails || !otherDetails) {
-      console.warn('Missing model details for precise collision check; falling back to AABB collision.');
       return true;
     }
 
@@ -337,7 +313,6 @@ export class CollisionDetector {
       });
 
       if (!response.ok) {
-        console.warn('Collision API responded with error status:', response.status);
         return true;
       }
 
