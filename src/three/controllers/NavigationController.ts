@@ -1,7 +1,6 @@
 import * as THREE from 'three';
 import { XRControllerBase, ControllerConfig } from './XRControllerBase';
 
-// NavigationController.ts - Handles VR navigation
 export class NavigationController extends XRControllerBase {
   private rig: THREE.Group | null = null;
   private isNavigating: boolean = false;

@@ -1,4 +1,3 @@
-// HomeModel.ts - Represents the home/room structure
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { Base3DObject } from './Base3DObject';
@@ -37,7 +36,6 @@ export class HomeModel extends Base3DObject {
     }
   }
 
-  // Implement abstract methods
   protected async fetchModel(path: string): Promise<THREE.Group> {
     return new Promise((resolve, reject) => {
       this.loader.load(
@@ -60,7 +58,6 @@ export class HomeModel extends Base3DObject {
     
     this.modelGroup.add(clonedModel);
     
-    // Calculate bounding box after alignment
     this.calculateBoundingBox();
   }
 
@@ -72,7 +69,6 @@ export class HomeModel extends Base3DObject {
     console.error(`❌ Failed to load home model ${this.name}:`, error);
   }
 
-  // Boundary management
   setBoundary(boundary: Boundary): void {
     this.boundary = boundary;
     this.boundingBox = new THREE.Box3(
@@ -89,7 +85,6 @@ export class HomeModel extends Base3DObject {
     return this.boundingBox;
   }
 
-  // Calculate bounding box from the loaded model
   protected calculateBoundingBox(): void {
     if (this.modelGroup.children.length === 0) return;
     
@@ -108,19 +103,16 @@ export class HomeModel extends Base3DObject {
     }
   }
 
-  // Check if a point is within the home boundaries
   containsPoint(point: THREE.Vector3): boolean {
-    if (!this.boundingBox) return true; // No boundary check if not set
+    if (!this.boundingBox) return true;
     return this.boundingBox.containsPoint(point);
   }
 
-  // Check if a box intersects with home boundaries
   intersectsBox(box: THREE.Box3): boolean {
     if (!this.boundingBox) return false;
     return this.boundingBox.intersectsBox(box);
   }
 
-  // Constrain a position to stay within home boundaries
   constrainPosition(position: THREE.Vector3): THREE.Vector3 {
     if (!this.boundingBox) return position.clone();
     
@@ -129,7 +121,6 @@ export class HomeModel extends Base3DObject {
     return constrained;
   }
 
-  // Check if a position with given size would fit in the home
   canFitObject(position: THREE.Vector3, size: THREE.Vector3): boolean {
     if (!this.boundingBox) return true;
     
@@ -147,17 +138,14 @@ export class HomeModel extends Base3DObject {
     );
   }
 
-  // Get the floor level (Y coordinate)
   getFloorLevel(): number {
     return this.boundingBox?.min.y || 0;
   }
 
-  // Get the ceiling level (Y coordinate)
   getCeilingLevel(): number {
     return this.boundingBox?.max.y || 3;
   }
 
-  // Serialize for saving
   serialize(): Record<string, any> {
     return {
       id: this.id,

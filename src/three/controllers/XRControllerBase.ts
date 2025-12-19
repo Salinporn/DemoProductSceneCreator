@@ -1,4 +1,3 @@
-// XRControllerBase.ts - Base class for XR controllers with input handling
 import * as THREE from 'three';
 
 export interface ControllerConfig {
@@ -21,7 +20,6 @@ export abstract class XRControllerBase {
     };
   }
 
-  // Configuration
   setEnabled(enabled: boolean): void {
     this.config.enabled = enabled;
   }
@@ -42,7 +40,6 @@ export abstract class XRControllerBase {
     this.config.deadzone = deadzone;
   }
 
-  // Button state tracking
   protected isButtonPressed(
     inputSource: any,
     buttonIndex: number
@@ -83,7 +80,7 @@ export abstract class XRControllerBase {
     return Math.abs(value) > this.config.deadzone;
   }
 
-  // Abstract methods for subclasses to implement
+
   abstract update(
     session: any,
     camera: THREE.Camera,
@@ -93,7 +90,7 @@ export abstract class XRControllerBase {
   abstract reset(): void;
 }
 
-// NavigationController.ts - Handles VR navigation
+// NavigationController
 export class NavigationController extends XRControllerBase {
   private rig: THREE.Group | null = null;
   private isNavigating: boolean = false;
@@ -131,7 +128,6 @@ export class NavigationController extends XRControllerBase {
     let moveZ = 0;
     let rotateInput = 0;
 
-    // Check all input sources
     session.inputSources.forEach((source: any) => {
       const gamepad = source.gamepad;
       if (!gamepad) return;
@@ -156,7 +152,6 @@ export class NavigationController extends XRControllerBase {
       }
     });
 
-    // Update navigation state
     if (isGripPressed !== this.isNavigating) {
       this.isNavigating = isGripPressed;
       this.onNavigationModeChange?.(this.isNavigating);
@@ -164,13 +159,11 @@ export class NavigationController extends XRControllerBase {
 
     if (!isGripPressed) return;
 
-    // Apply rotation
     if (Math.abs(rotateInput) > 0) {
       const rotationDelta = rotateInput * this.config.rotateSpeed * delta;
       this.rig.rotateY(rotationDelta);
     }
 
-    // Apply movement
     if (Math.abs(moveX) > 0 || Math.abs(moveZ) > 0) {
       const forward = new THREE.Vector3();
       camera.getWorldDirection(forward);
@@ -194,7 +187,7 @@ export class NavigationController extends XRControllerBase {
   }
 }
 
-// FurnitureController.ts - Handles furniture manipulation in VR
+// FurnitureController
 export class FurnitureEditController extends XRControllerBase {
   private selectedFurnitureId: string | null = null;
   private onFurnitureMove?: (id: string, delta: THREE.Vector3) => void;
@@ -230,7 +223,6 @@ export class FurnitureEditController extends XRControllerBase {
   ): void {
     if (!this.config.enabled || !this.selectedFurnitureId || !session || !session.inputSources) return;
 
-    // Check for deselection (grip button)
     let shouldCheckInputs = true;
     session.inputSources.forEach((source: any, index: number) => {
       const gamepad = source.gamepad;
@@ -241,7 +233,7 @@ export class FurnitureEditController extends XRControllerBase {
         if (this.selectedFurnitureId) {
           this.onFurnitureDeselect?.(this.selectedFurnitureId);
           this.selectedFurnitureId = null;
-          shouldCheckInputs = false; // Don't process other inputs this frame
+          shouldCheckInputs = false;
         }
       }
     });
@@ -252,7 +244,6 @@ export class FurnitureEditController extends XRControllerBase {
     let moveZ = 0;
     let rotateInput = 0;
 
-    // Get input from controllers
     session.inputSources.forEach((source: any) => {
       const gamepad = source.gamepad;
       if (!gamepad) return;
@@ -270,7 +261,6 @@ export class FurnitureEditController extends XRControllerBase {
       }
     });
 
-    // Apply movement
     if (Math.abs(moveX) > 0 || Math.abs(moveZ) > 0) {
       const forward = new THREE.Vector3();
       camera.getWorldDirection(forward);
@@ -284,11 +274,9 @@ export class FurnitureEditController extends XRControllerBase {
       deltaPosition.addScaledVector(forward, -moveZ * this.config.moveSpeed * delta);
       deltaPosition.addScaledVector(right, moveX * this.config.moveSpeed * delta);
 
-      // Call synchronously
       this.onFurnitureMove?.(this.selectedFurnitureId, deltaPosition);
     }
 
-    // Apply rotation
     if (Math.abs(rotateInput) > 0) {
       const deltaRotation = rotateInput * this.config.rotateSpeed * delta;
       this.onFurnitureRotate?.(this.selectedFurnitureId, deltaRotation);

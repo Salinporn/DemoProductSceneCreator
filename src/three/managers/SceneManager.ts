@@ -1,4 +1,3 @@
-// SceneManager.ts - Manages the entire 3D scene with furniture and home
 import * as THREE from 'three';
 import { FurnitureItem } from '../objects/FurnitureItem';
 import { HomeModel } from '../objects/HomeModel';
@@ -14,7 +13,7 @@ export class SceneManager {
   protected scene: THREE.Scene;
   protected homeModel: HomeModel | null = null;
   protected furnitureItems: Map<string, FurnitureItem> = new Map();
-  public collisionDetector: CollisionDetector; // Changed to public for access
+  public collisionDetector: CollisionDetector;
   protected config: Required<SceneConfig>;
   protected selectedItemId: string | null = null;
 
@@ -42,7 +41,6 @@ export class SceneManager {
     
     await homeModel.loadModel(this.scene);
     
-    // Set boundary in collision detector
     const boundary = homeModel.getBoundary();
     if (boundary) {
       this.collisionDetector.setRoomBoundary(boundary);
@@ -57,7 +55,6 @@ export class SceneManager {
     return this.collisionDetector;
   }
 
-  // Furniture management
   async addFurniture(furniture: FurnitureItem): Promise<boolean> {
     if (this.furnitureItems.has(furniture.getId())) {
       console.warn(`Furniture with ID ${furniture.getId()} already exists`);
@@ -69,13 +66,10 @@ export class SceneManager {
     
     await furniture.loadModel(this.scene);
     
-    // Update collision detection for the new furniture and all existing furniture
     if (this.config.enableCollisionDetection) {
-      // Small delay to ensure model is fully loaded
       setTimeout(async () => {
         await this.updateFurnitureCollision(furniture.getId());
         
-        // Update collisions for all other items
         for (const [otherId] of this.furnitureItems) {
           if (otherId !== furniture.getId()) {
             await this.updateFurnitureCollision(otherId);
@@ -122,12 +116,10 @@ export class SceneManager {
     this.selectedItemId = null;
   }
 
-  // Selection management
   selectFurniture(id: string): boolean {
     const furniture = this.furnitureItems.get(id);
     if (!furniture) return false;
 
-    // Deselect previous
     if (this.selectedItemId && this.selectedItemId !== id) {
       const prevFurniture = this.furnitureItems.get(this.selectedItemId);
       prevFurniture?.deselect();
@@ -154,7 +146,6 @@ export class SceneManager {
     return this.selectedItemId ? this.furnitureItems.get(this.selectedItemId) || null : null;
   }
 
-  // Collision detection
   async updateFurnitureCollision(id: string): Promise<void> {
     const furniture = this.furnitureItems.get(id);
     if (!furniture) return;
@@ -179,7 +170,6 @@ export class SceneManager {
     }
   }
 
-  // Position validation
   async isPositionValid(id: string, position: THREE.Vector3): Promise<boolean> {
     const furniture = this.furnitureItems.get(id);
     if (!furniture) return false;
@@ -191,7 +181,6 @@ export class SceneManager {
     );
   }
 
-  // Transform operations with validation
   async moveFurniture(
     id: string,
     newPosition: [number, number, number]
@@ -206,15 +195,12 @@ export class SceneManager {
 
     const originalPosition = furniture.getPosition();
     
-    // Temporarily update position to check collision
     furniture.setPosition(newPosition);
     this.collisionDetector.updateFurnitureBox(id, furniture.getGroup(), furniture.getModelId());
     
-    // Check collision at new position
     const collision = await this.collisionDetector.checkAllCollisions(id);
     
     if (collision.hasCollision) {
-      // COLLISION DETECTED - revert to original position
       console.warn('🚫 Collision detected for', furniture.getName(), '- reverting from', newPosition, 'to', originalPosition, 'colliding with:', collision.collidingObjects);
       furniture.setPosition(originalPosition);
       this.collisionDetector.updateFurnitureBox(id, furniture.getGroup(), furniture.getModelId());
@@ -222,10 +208,8 @@ export class SceneManager {
       return false;
     }
 
-    // NO COLLISION - keep new position and update all collisions
     furniture.setCollision(false);
     
-    // Update collision state for all other furniture
     for (const [otherId] of this.furnitureItems) {
       if (otherId !== id) {
         await this.updateFurnitureCollision(otherId);
@@ -242,9 +226,7 @@ export class SceneManager {
     furniture.setRotation(rotation);
     
     if (this.config.enableCollisionDetection) {
-      // Update collision asynchronously without blocking
       this.updateFurnitureCollision(id).then(() => {
-        // Update all other furniture collisions
         this.furnitureItems.forEach((_, otherId) => {
           if (otherId !== id) {
             this.updateFurnitureCollision(otherId);
@@ -263,9 +245,7 @@ export class SceneManager {
     furniture.setScale(scale);
     
     if (this.config.enableCollisionDetection) {
-      // Update collision asynchronously without blocking
       this.updateFurnitureCollision(id).then(() => {
-        // Update all other furniture collisions
         this.furnitureItems.forEach((_, otherId) => {
           if (otherId !== id) {
             this.updateFurnitureCollision(otherId);
@@ -277,7 +257,6 @@ export class SceneManager {
     return true;
   }
 
-  // Spawn position calculation
   calculateSpawnPosition(camera: THREE.Camera, distance: number = 2): [number, number, number] {
     const cameraWorldPos = new THREE.Vector3();
     camera.getWorldPosition(cameraWorldPos);
@@ -289,7 +268,6 @@ export class SceneManager {
     spawnPos.addScaledVector(cameraDirection, distance);
     spawnPos.y = this.config.floorLevel;
 
-    // Constrain to home if available
     if (this.homeModel) {
       const constrained = this.homeModel.constrainPosition(spawnPos);
       return [constrained.x, constrained.y, constrained.z];
@@ -298,12 +276,10 @@ export class SceneManager {
     return [spawnPos.x, spawnPos.y, spawnPos.z];
   }
 
-  // Serialization for saving
   serializeScene(): Record<string, any> {
     const deployedItems: Record<string, any> = {};
 
     this.furnitureItems.forEach((furniture) => {
-      // Extract catalog ID (original item ID without timestamp)
       const catalogId = furniture.getId().includes('-') 
         ? furniture.getId().split('-')[0] 
         : furniture.getId();
@@ -317,7 +293,6 @@ export class SceneManager {
     };
   }
 
-  // Configuration
   setDebugMode(enabled: boolean): void {
     this.config.enableDebugMode = enabled;
     this.collisionDetector.setDebugMode(enabled);
@@ -327,7 +302,6 @@ export class SceneManager {
     this.config.enableCollisionDetection = enabled;
   }
 
-  // Cleanup
   dispose(): void {
     this.clearAllFurniture();
     

@@ -1,4 +1,3 @@
-// CollisionDetector.ts - Handles collision detection (Refactored as singleton class)
 import * as THREE from 'three';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL;
@@ -38,7 +37,6 @@ export class CollisionDetector {
     return CollisionDetector.instance;
   }
 
-  // Debug mode
   setDebugMode(enabled: boolean): void {
     this.showDebugBoxes = enabled;
     if (!enabled) {
@@ -55,7 +53,6 @@ export class CollisionDetector {
     this.helperMeshes.clear();
   }
 
-  // Room boundary management
   setRoomBoundary(boundary: {
     min_x: number;
     max_x: number;
@@ -74,12 +71,10 @@ export class CollisionDetector {
     return this.roomBox;
   }
 
-  // Furniture box management
   updateFurnitureBox(itemId: string, object: THREE.Object3D, modelId?: number): void {
     const box = new THREE.Box3().setFromObject(object);
     this.furnitureBoxes.set(itemId, box);
 
-    // Capture world-space transform
     const worldPosition = new THREE.Vector3();
     const worldQuaternion = new THREE.Quaternion();
     const worldScale = new THREE.Vector3();
@@ -112,7 +107,6 @@ export class CollisionDetector {
     this.helperMeshes.delete(itemId);
   }
 
-  // Room collision checking
   checkRoomCollision(itemId: string): CollisionResult {
     const box = this.furnitureBoxes.get(itemId);
     
@@ -132,7 +126,6 @@ export class CollisionDetector {
       return { hasCollision: false, collidingObjects: [] };
     }
 
-    // Calculate collision normal for correction
     const center = new THREE.Vector3();
     box.getCenter(center);
     
@@ -150,7 +143,6 @@ export class CollisionDetector {
     };
   }
 
-  // Furniture-to-furniture collision checking
   async checkFurnitureCollisions(itemId: string): Promise<CollisionResult> {
     const box = this.furnitureBoxes.get(itemId);
     
@@ -176,7 +168,6 @@ export class CollisionDetector {
     };
   }
 
-  // Combined collision check
   async checkAllCollisions(itemId: string): Promise<CollisionResult> {
     const roomCollision = this.checkRoomCollision(itemId);
     const furnitureCollision = await this.checkFurnitureCollisions(itemId);
@@ -191,7 +182,6 @@ export class CollisionDetector {
     };
   }
 
-  // Position validation
   async isPositionValid(
     itemId: string,
     position: THREE.Vector3,
@@ -203,21 +193,18 @@ export class CollisionDetector {
 
     const collision = await this.checkAllCollisions(itemId);
     
-    // Restore original position
     object.position.copy(originalPosition);
     this.updateFurnitureBox(itemId, object);
 
     return !collision.hasCollision;
   }
 
-  // Find valid position near desired position
   async findValidPosition(
     itemId: string,
     desiredPosition: THREE.Vector3,
     object: THREE.Object3D,
     maxAttempts: number = 8
   ): Promise<THREE.Vector3 | null> {
-    // Try the desired position first
     const originalPosition = object.position.clone();
     object.position.copy(desiredPosition);
     this.updateFurnitureBox(itemId, object);
@@ -227,7 +214,6 @@ export class CollisionDetector {
       return desiredPosition.clone();
     }
 
-    // Try positions in a circle around the desired position
     const radius = 0.5;
     const angleStep = (Math.PI * 2) / maxAttempts;
 
@@ -248,13 +234,11 @@ export class CollisionDetector {
       }
     }
 
-    // Restore original position
     object.position.copy(originalPosition);
     this.updateFurnitureBox(itemId, object);
     return null;
   }
 
-  // Constrain position to room
   constrainToRoom(position: THREE.Vector3, itemBox: THREE.Box3): THREE.Vector3 {
     if (!this.roomBox) return position;
 
@@ -287,7 +271,6 @@ export class CollisionDetector {
     return correctedPosition;
   }
 
-  // API-based precise collision detection
   private getModelDetails(itemId: string) {
     const transform = this.furnitureTransforms.get(itemId);
     if (!transform || transform.modelId === undefined) return null;
@@ -378,7 +361,6 @@ export class CollisionDetector {
     }
   }
 
-  // Utility methods
   private computeBoxDistance(boxA: THREE.Box3, boxB: THREE.Box3): number {
     const dx = Math.max(0, Math.max(boxB.min.x - boxA.max.x, boxA.min.x - boxB.max.x));
     const dy = Math.max(0, Math.max(boxB.min.y - boxA.max.y, boxA.min.y - boxB.max.y));
@@ -405,7 +387,6 @@ export class CollisionDetector {
     return new Map(this.furnitureBoxes);
   }
 
-  // Debug visualization
   private createDebugBox(itemId: string, box: THREE.Box3, parent: THREE.Object3D | null): void {
     const oldHelper = this.helperMeshes.get(itemId);
     if (oldHelper && oldHelper.parent) {
@@ -435,7 +416,6 @@ export class CollisionDetector {
     this.helperMeshes.set(itemId, helper);
   }
 
-  // Cleanup
   clear(): void {
     this.furnitureBoxes.clear();
     this.furnitureTransforms.clear();

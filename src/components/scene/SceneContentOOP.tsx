@@ -1,4 +1,3 @@
-// SceneContentOOP.tsx - Complete working integration with OOP classes
 import * as React from "react";
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -7,7 +6,6 @@ import { useXRStore, useXR } from "@react-three/xr";
 import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 
-// UI Components (unchanged)
 import { CatalogToggle } from "../panel/furniture/FurnitureCatalogToggle";
 import { VRInstructionPanel } from "../panel/VRInstructionPanel";
 import { VRFurniturePanel } from "../panel/furniture/FurniturePanel";
@@ -17,13 +15,11 @@ import { VRControlPanel } from "../panel/control/ControlPanel";
 import { ControlPanelToggle } from "../panel/control/ControlPanelToggle";
 import { VRNotificationPanel } from "../panel/common/NotificationPanel";
 
-// OOP Classes
 import { SceneManager } from "../../three/managers/SceneManager";
 import { FurnitureItem, FurnitureMetadata } from "../../three/objects/FurnitureItem";
 import { HomeModel } from "../../three/objects/HomeModel";
 import { NavigationController, FurnitureEditController } from "../../three/controllers/XRControllerBase";
 
-// Utils
 import { makeAuthenticatedRequest, logout } from "../../utils/Auth";
 
 const DIGITAL_HOME_PLATFORM_BASE_URL = import.meta.env.VITE_DIGITAL_HOME_PLATFORM_URL;
@@ -50,12 +46,10 @@ export function SceneContentOOP({ homeId, digitalHome }: SceneContentProps) {
   const xr = useXR();
   const xrStore = useXRStore();
   
-  // OOP Managers and Controllers
   const sceneManagerRef = useRef<SceneManager | null>(null);
   const navigationControllerRef = useRef<NavigationController | null>(null);
   const furnitureControllerRef = useRef<FurnitureEditController | null>(null);
   
-  // UI State
   const [showSlider, setShowSlider] = useState(false);
   const [showFurniture, setShowFurniture] = useState(false);
   const [showInstructions, setShowInstructions] = useState(true);
@@ -64,24 +58,20 @@ export function SceneContentOOP({ homeId, digitalHome }: SceneContentProps) {
   const [notificationMessage, setNotificationMessage] = useState("");
   const [notificationType, setNotificationType] = useState<"success" | "error" | "info">("info");
   
-  // Scene State
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const [navigationMode, setNavigationMode] = useState(false);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   
-  // Slider values
   const [sliderValue, setSliderValue] = useState(1.0);
   const [rotationValue, setRotationValue] = useState(0);
   
-  // Furniture catalog
   const [furnitureCatalog, setFurnitureCatalog] = useState<any[]>([]);
   const [catalogLoading, setCatalogLoading] = useState(false);
   const [modelUrlCache, setModelUrlCache] = useState<Map<number, string>>(new Map());
 
   const uiLocked = showFurniture || showControlPanel || showInstructions || showSlider || showNotification;
 
-  // Show notification helper
   const showNotificationMessage = (message: string, type: "success" | "error" | "info" = "info") => {
     setShowControlPanel(false);
     setNotificationMessage(message);
@@ -89,7 +79,6 @@ export function SceneContentOOP({ homeId, digitalHome }: SceneContentProps) {
     setShowNotification(true);
   };
 
-  // Initialize Scene Manager and Controllers
   useEffect(() => {
     const sceneManager = new SceneManager(scene, {
       enableCollisionDetection: true,
@@ -98,7 +87,6 @@ export function SceneContentOOP({ homeId, digitalHome }: SceneContentProps) {
     });
     sceneManagerRef.current = sceneManager;
 
-    // Initialize Navigation Controller
     const navController = new NavigationController(
       {
         moveSpeed: 2.5,
@@ -111,7 +99,6 @@ export function SceneContentOOP({ homeId, digitalHome }: SceneContentProps) {
     );
     navigationControllerRef.current = navController;
 
-    // Initialize Furniture Edit Controller
     const furnitureController = new FurnitureEditController(
       {
         moveSpeed: 1.5,
@@ -145,7 +132,6 @@ export function SceneContentOOP({ homeId, digitalHome }: SceneContentProps) {
 
           sceneManager.rotateFurniture(id, newRot);
           
-          // Update rotation slider
           const twoPi = Math.PI * 2;
           let normalizedRotation = newRot[1] % twoPi;
           if (normalizedRotation < 0) normalizedRotation += twoPi;
@@ -167,7 +153,6 @@ export function SceneContentOOP({ homeId, digitalHome }: SceneContentProps) {
     };
   }, [scene, homeId]);
 
-  // Setup XR Rig for navigation
   useEffect(() => {
     if (!xr.session || !navigationControllerRef.current) return;
 
@@ -183,7 +168,6 @@ export function SceneContentOOP({ homeId, digitalHome }: SceneContentProps) {
     navigationControllerRef.current.setRig(rig);
   }, [xr.session, scene, camera]);
 
-  // Load Home Model
   useEffect(() => {
     const loadHome = async () => {
       if (!sceneManagerRef.current) return;
@@ -213,7 +197,6 @@ export function SceneContentOOP({ homeId, digitalHome }: SceneContentProps) {
     loadHome();
   }, [homeId, digitalHome]);
 
-  // Load furniture catalog
   useEffect(() => {
     const loadFurnitureCatalog = async () => {
       setCatalogLoading(true);
@@ -235,7 +218,6 @@ export function SceneContentOOP({ homeId, digitalHome }: SceneContentProps) {
 
           setFurnitureCatalog(items);
 
-          // Preload models
           for (const item of items) {
             await loadFurnitureModel(item.model_id);
           }
@@ -254,7 +236,6 @@ export function SceneContentOOP({ homeId, digitalHome }: SceneContentProps) {
     };
   }, []);
 
-  // Load furniture model helper
   const loadFurnitureModel = async (modelId: number) => {
     if (modelUrlCache.has(modelId)) return;
 
@@ -270,7 +251,6 @@ export function SceneContentOOP({ homeId, digitalHome }: SceneContentProps) {
     }
   };
 
-  // Load deployed items
   useEffect(() => {
     const loadDeployedItems = async () => {
       if (!sceneManagerRef.current || modelUrlCache.size === 0) return;
@@ -312,7 +292,6 @@ export function SceneContentOOP({ homeId, digitalHome }: SceneContentProps) {
             await sceneManagerRef.current.addFurniture(furniture);
           }
           
-          // After all furniture loaded, update all collisions
           if (sceneManagerRef.current) {
             setTimeout(async () => {
               await sceneManagerRef.current!.updateAllCollisions();
@@ -332,21 +311,17 @@ export function SceneContentOOP({ homeId, digitalHome }: SceneContentProps) {
     }
   }, [homeId, modelUrlCache.size]);
 
-  // Update loop - run controllers
   useFrame((_state, delta) => {
     const session = xr.session;
     if (!session) return;
 
-    // Update navigation
     navigationControllerRef.current?.update(session, camera, delta);
 
-    // Update furniture controller when not navigating
     if (!navigationMode && selectedItemId && furnitureControllerRef.current) {
       furnitureControllerRef.current.update(session, camera, delta);
     }
   });
 
-  // UI Handlers
   const handleToggleUI = () => {
     if (showControlPanel) {
       setShowControlPanel(false);
@@ -490,7 +465,6 @@ export function SceneContentOOP({ homeId, digitalHome }: SceneContentProps) {
       setSelectedItemId(uniqueId);
       furnitureControllerRef.current?.setSelectedFurniture(uniqueId);
       
-      // Initialize last valid position
       newFurniture['lastValidPosition'] = [...spawnPos] as [number, number, number];
       
       setRotationValue(0);
@@ -514,25 +488,21 @@ export function SceneContentOOP({ homeId, digitalHome }: SceneContentProps) {
     setSelectedItemId(id);
     setShowSlider(true);
     
-    // Sync with controller
     furnitureControllerRef.current?.setSelectedFurniture(id);
 
     const furniture = sceneManagerRef.current.getFurniture(id);
     if (furniture) {
-      // Store initial position as last valid position
       const currentPos = furniture.getPosition();
       furniture['lastValidPosition'] = [...currentPos] as [number, number, number];
       
       const rotation = furniture.getRotation();
       const scale = furniture.getScale();
       
-      // Update rotation slider
       const twoPi = Math.PI * 2;
       let normalizedRotation = rotation[1] % twoPi;
       if (normalizedRotation < 0) normalizedRotation += twoPi;
       setRotationValue(normalizedRotation);
       
-      // Update scale slider
       const scaleValue = typeof scale === 'number' ? scale : scale[0];
       setSliderValue(scaleValue);
     }
@@ -556,7 +526,6 @@ export function SceneContentOOP({ homeId, digitalHome }: SceneContentProps) {
     }
   };
 
-  // Get placed furniture IDs for catalog
   const placedCatalogIds = React.useMemo(() => {
     if (!sceneManagerRef.current) return [];
     return sceneManagerRef.current.getAllFurniture().map(item => item.getId().split('-')[0]);
@@ -586,7 +555,6 @@ export function SceneContentOOP({ homeId, digitalHome }: SceneContentProps) {
       <directionalLight position={[5, 5, 5]} intensity={1} />
       <Environment preset="warehouse" />
 
-      {/* Render 3D objects from SceneManager - demonstrates encapsulation */}
       <group position={[0, 0, 0]}>
         {sceneManagerRef.current && (
           <>

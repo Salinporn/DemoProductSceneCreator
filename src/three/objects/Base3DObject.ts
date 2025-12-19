@@ -1,4 +1,3 @@
-// Base3DObject.ts - Base class for all 3D objects in the scene
 import * as THREE from 'three';
 
 export interface Transform {
@@ -41,7 +40,6 @@ export abstract class Base3DObject {
     this.updateTransform();
   }
 
-  // Getters
   getId(): string { return this.id; }
   getName(): string { return this.name; }
   getModelId(): number { return this.modelId; }
@@ -61,7 +59,6 @@ export abstract class Base3DObject {
     return this.transform.scale;
   }
 
-  // Setters
   setPosition(position: [number, number, number]): void {
     this.transform.position = [...position] as [number, number, number];
     this.updateTransform();
@@ -81,7 +78,6 @@ export abstract class Base3DObject {
     this.updateTransform();
   }
 
-  // Update the Three.js group transform from internal transform
   protected updateTransform(): void {
     this.group.position.set(...this.transform.position);
     this.group.rotation.set(...this.transform.rotation);
@@ -92,12 +88,10 @@ export abstract class Base3DObject {
       this.group.scale.set(...this.transform.scale);
     }
     
-    // Force Three.js to update the transform matrices
     this.group.updateMatrix();
     this.group.updateMatrixWorld(true);
   }
 
-  // Load and setup the 3D model
   async loadModel(scene: THREE.Scene): Promise<void> {
     if (!this.modelPath) {
       console.warn(`No model path for ${this.name}`);
@@ -114,13 +108,11 @@ export abstract class Base3DObject {
     }
   }
 
-  // Abstract methods to be implemented by subclasses
   protected abstract fetchModel(path: string): Promise<THREE.Group>;
   protected abstract setupModel(model: THREE.Group): void;
   protected abstract onModelLoaded(model: THREE.Group): void;
   protected abstract onModelLoadError(error: unknown): void;
 
-  // Cleanup
   dispose(): void {
     this.group.traverse((child) => {
       if (child instanceof THREE.Mesh) {

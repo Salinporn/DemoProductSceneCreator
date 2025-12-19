@@ -1,11 +1,8 @@
-// SceneCreator.tsx - Entry point using the OOP-based SceneContent
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Canvas } from "@react-three/fiber";
 import { createXRStore, XR } from "@react-three/xr";
 import { makeAuthenticatedRequest } from "../utils/Auth";
-
-// Import the new OOP-based SceneContent
 import { SceneContentOOP } from "../components/scene/SceneContentOOP";
 
 const xrStore = createXRStore();

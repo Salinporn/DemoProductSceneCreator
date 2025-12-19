@@ -1,8 +1,6 @@
 import * as THREE from 'three';
 import { XRControllerBase, ControllerConfig } from './XRControllerBase';
 
-
-// FurnitureController.ts - Handles furniture manipulation in VR
 export class FurnitureEditController extends XRControllerBase {
   private selectedFurnitureId: string | null = null;
   private onFurnitureMove?: (id: string, delta: THREE.Vector3) => void;
@@ -50,7 +48,7 @@ export class FurnitureEditController extends XRControllerBase {
         if (this.selectedFurnitureId) {
           this.onFurnitureDeselect?.(this.selectedFurnitureId);
           this.selectedFurnitureId = null;
-          shouldCheckInputs = false; // Don't process other inputs this frame
+          shouldCheckInputs = false;
         }
       }
     });
@@ -61,7 +59,6 @@ export class FurnitureEditController extends XRControllerBase {
     let moveZ = 0;
     let rotateInput = 0;
 
-    // Get input from controllers
     session.inputSources.forEach((source: any) => {
       const gamepad = source.gamepad;
       if (!gamepad) return;
@@ -79,7 +76,6 @@ export class FurnitureEditController extends XRControllerBase {
       }
     });
 
-    // Apply movement
     if (Math.abs(moveX) > 0 || Math.abs(moveZ) > 0) {
       const forward = new THREE.Vector3();
       camera.getWorldDirection(forward);
@@ -93,7 +89,6 @@ export class FurnitureEditController extends XRControllerBase {
       deltaPosition.addScaledVector(forward, -moveZ * this.config.moveSpeed * delta);
       deltaPosition.addScaledVector(right, moveX * this.config.moveSpeed * delta);
 
-      // Don't call callback if move check is in progress
       if (!this.moveCheckInProgress) {
         this.onFurnitureMove?.(this.selectedFurnitureId, deltaPosition);
       }

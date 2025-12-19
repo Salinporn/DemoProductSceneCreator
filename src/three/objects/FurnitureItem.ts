@@ -1,4 +1,3 @@
-// FurnitureItem.ts - Represents a furniture item in the scene
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { Base3DObject, Transform } from './Base3DObject';
@@ -32,7 +31,6 @@ export class FurnitureItem extends Base3DObject {
     this.loader = new GLTFLoader();
   }
 
-  // Implement abstract methods
   protected async fetchModel(path: string): Promise<THREE.Group> {
     return new Promise((resolve, reject) => {
       this.loader.load(
@@ -64,7 +62,6 @@ export class FurnitureItem extends Base3DObject {
     console.error(`❌ Failed to load model for ${this.name}:`, error);
   }
 
-  // Furniture-specific methods
   getMetadata(): FurnitureMetadata {
     return { ...this.metadata };
   }
@@ -73,7 +70,6 @@ export class FurnitureItem extends Base3DObject {
     return this.metadata.isContainer || false;
   }
 
-  // Selection management
   select(): void {
     if (this.isSelected) return;
     this.isSelected = true;
@@ -104,7 +100,6 @@ export class FurnitureItem extends Base3DObject {
     return this.hasCollision;
   }
 
-  // Visual indicators
   protected updateSelectionIndicator(): void {
     if (this.selectionIndicator) {
       this.group.remove(this.selectionIndicator);
@@ -120,7 +115,6 @@ export class FurnitureItem extends Base3DObject {
   protected createSelectionIndicator(): THREE.Group {
     const indicator = new THREE.Group();
     
-    // Ring indicator
     const ringGeometry = new THREE.RingGeometry(0.3, 0.35, 32);
     const ringMaterial = new THREE.MeshBasicMaterial({
       color: this.hasCollision ? 0xff0000 : 0x00ff00,
@@ -133,7 +127,6 @@ export class FurnitureItem extends Base3DObject {
     ring.position.y = 0.01;
     indicator.add(ring);
 
-    // Direction arrow
     const coneGeometry = new THREE.ConeGeometry(0.05, 0.1, 8);
     const coneMaterial = new THREE.MeshBasicMaterial({
       color: this.hasCollision ? 0xff0000 : 0xffff00,
@@ -157,7 +150,6 @@ export class FurnitureItem extends Base3DObject {
       this.group.add(this.collisionIndicator);
     }
 
-    // Update selection indicator color if selected
     if (this.isSelected) {
       this.updateSelectionIndicator();
     }
@@ -181,7 +173,6 @@ export class FurnitureItem extends Base3DObject {
     return indicator;
   }
 
-  // Transform with collision check capability
   async moveWithValidation(
     newPosition: [number, number, number],
     validator?: (item: FurnitureItem) => Promise<boolean>
@@ -200,7 +191,6 @@ export class FurnitureItem extends Base3DObject {
     return true;
   }
 
-  // Clone this furniture item
   clone(): FurnitureItem {
     return new FurnitureItem(
       `${this.id}-${Date.now()}`,
@@ -216,14 +206,13 @@ export class FurnitureItem extends Base3DObject {
     );
   }
 
-  // Serialize for saving
   serialize(): Record<string, any> {
     const scale = this.getScale();
     const scaleArray = typeof scale === 'number' ? [scale, scale, scale] : scale;
 
     return {
       id: this.id,
-      position: [...this.getPosition(), 0], // Add m coordinate
+      position: [...this.getPosition(), 0],
       rotation: this.getRotation(),
       scale: scaleArray,
       is_container: this.isContainerType(),
@@ -233,7 +222,6 @@ export class FurnitureItem extends Base3DObject {
     };
   }
 
-  // Override dispose to clean up indicators
   dispose(): void {
     if (this.selectionIndicator) {
       this.group.remove(this.selectionIndicator);
