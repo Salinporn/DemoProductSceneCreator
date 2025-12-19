@@ -1,9 +1,12 @@
+// SceneCreator.tsx - Entry point using the OOP-based SceneContent
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Canvas } from "@react-three/fiber";
 import { createXRStore, XR } from "@react-three/xr";
 import { makeAuthenticatedRequest } from "../utils/Auth";
-import { SceneContent } from "../components/scene/SceneContent";
+
+// Import the new OOP-based SceneContent
+import { SceneContentOOP } from "../components/scene/SceneContentOOP";
 
 const xrStore = createXRStore();
 
@@ -127,7 +130,7 @@ export function SceneCreator() {
     <div style={{ width: '100vw', height: '100vh', position: 'relative' }}>
       <Canvas style={{ width: "100vw", height: "100vh", position: "fixed" }}>
         <XR store={xrStore}>
-          {homeId && <SceneContent homeId={homeId} digitalHome={digitalHome} />}
+          {homeId && <SceneContentOOP homeId={homeId} digitalHome={digitalHome} />}
         </XR>
       </Canvas>
 
