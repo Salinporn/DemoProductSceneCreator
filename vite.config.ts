@@ -15,4 +15,10 @@ export default defineConfig({
       input: './index.html',
     },
   },
+  resolve: {
+    dedupe: ['three'],
+  },
+  optimizeDeps: {
+    include: ['three'],
+  },
 });
