@@ -38,91 +38,104 @@ interface SceneContentProps {
   };
 }
 
-export function SceneContent({ homeId, digitalHome }: SceneContentProps) {
-  const navigate = useNavigate();
-  const { scene, camera } = useThree();
-  const xr = useXR();
-  const xrStore = useXRStore();
-  
-  // Managers and Controllers
-  const sceneManagerRef = useRef<SceneManager | null>(null);
-  const navigationControllerRef = useRef<NavigationController | null>(null);
-  const furnitureControllerRef = useRef<FurnitureEditController | null>(null);
-  
-  // UI
-  const [showSlider, setShowSlider] = useState(false);
-  const [showFurniture, setShowFurniture] = useState(false);
-  const [showInstructions, setShowInstructions] = useState(true);
-  const [showControlPanel, setShowControlPanel] = useState(false);
-  const [showNotification, setShowNotification] = useState(false);
-  const [notificationMessage, setNotificationMessage] = useState("");
-  const [notificationType, setNotificationType] = useState<"success" | "error" | "info">("info");
-  const [notificationFromControlPanel, setNotificationFromControlPanel] = useState(false);
+interface SceneState {
+  showSlider: boolean;
+  showFurniture: boolean;
+  showInstructions: boolean;
+  showControlPanel: boolean;
+  showNotification: boolean;
+  notificationMessage: string;
+  notificationType: "success" | "error" | "info";
+  notificationFromControlPanel: boolean;
+  showMoveCloserPanel: boolean;
+  showPreciseCheckPanel: boolean;
+  preciseCheckInProgress: boolean;
+  saving: boolean;
+  loading: boolean;
+  navigationMode: boolean;
+  selectedItemId: string | null;
+  sliderValue: number;
+  rotationValue: number;
+  furnitureCatalog: any[];
+  catalogLoading: boolean;
+}
 
-  // Confirmation panels
-  const [showMoveCloserPanel, setShowMoveCloserPanel] = useState(false);
-  const [showPreciseCheckPanel, setShowPreciseCheckPanel] = useState(false);
-  const [preciseCheckInProgress, setPreciseCheckInProgress] = useState(false);
+class SceneContentLogic {
+  private state: SceneState;
+  private setState: (updater: Partial<SceneState> | ((prev: SceneState) => Partial<SceneState>)) => void;
+  private homeId: string;
+  private navigate: (path: string) => void;
   
-  const pendingMoveRef = useRef<[number, number, number] | null>(null);
-  const currentAABBPositionRef = useRef<[number, number, number] | null>(null);
+  // Managers
+  public sceneManager: SceneManager | null = null;
+  public navigationController: NavigationController | null = null;
+  public furnitureController: FurnitureEditController | null = null;
   
-  // Scene
-  const [saving, setSaving] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [navigationMode, setNavigationMode] = useState(false);
-  const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
-  
-  // Slider
-  const [sliderValue, setSliderValue] = useState(1.0);
-  const [rotationValue, setRotationValue] = useState(0);
-  
-  // Furniture catalog
-  const [furnitureCatalog, setFurnitureCatalog] = useState<any[]>([]);
-  const [catalogLoading, setCatalogLoading] = useState(false);
-  const [modelUrlCache, setModelUrlCache] = useState<Map<number, string>>(new Map());
+  // Refs
+  public pendingMove: [number, number, number] | null = null;
+  public currentAABBPosition: [number, number, number] | null = null;
+  public modelUrlCache: Map<number, string> = new Map();
 
-  const uiLocked = showFurniture || 
-    showControlPanel || 
-    showInstructions || 
-    showSlider || 
-    showNotification ||
-    showMoveCloserPanel ||
-    showPreciseCheckPanel;
+  constructor(
+    homeId: string,
+    navigate: (path: string) => void,
+    setState: (updater: Partial<SceneState> | ((prev: SceneState) => Partial<SceneState>)) => void
+  ) {
+    this.homeId = homeId;
+    this.navigate = navigate;
+    this.setState = setState;
+    
+    this.state = {
+      showSlider: false,
+      showFurniture: false,
+      showInstructions: true,
+      showControlPanel: false,
+      showNotification: false,
+      notificationMessage: "",
+      notificationType: "info",
+      notificationFromControlPanel: false,
+      showMoveCloserPanel: false,
+      showPreciseCheckPanel: false,
+      preciseCheckInProgress: false,
+      saving: false,
+      loading: true,
+      navigationMode: false,
+      selectedItemId: null,
+      sliderValue: 1.0,
+      rotationValue: 0,
+      furnitureCatalog: [],
+      catalogLoading: false,
+    };
+  }
 
-  const showNotificationMessage = (message: string, type: "success" | "error" | "info" = "info", fromControlPanel: boolean = false) => {
-    if (!fromControlPanel) {
-      setShowControlPanel(false);
-    }
-    setShowMoveCloserPanel(false);
-    setShowPreciseCheckPanel(false);
-    setNotificationMessage(message);
-    setNotificationType(type);
-    setNotificationFromControlPanel(fromControlPanel);
-    setShowNotification(true);
-  };
+  getState(): SceneState {
+    return this.state;
+  }
 
-  useEffect(() => {
-    const sceneManager = new SceneManager(scene, {
+  updateState(update: Partial<SceneState>): void {
+    this.state = { ...this.state, ...update };
+    this.setState(update);
+  }
+
+  initializeManagers(scene: THREE.Scene): void {
+    this.sceneManager = new SceneManager(scene, {
       enableCollisionDetection: true,
       enableDebugMode: false,
       floorLevel: 0,
     });
-    sceneManagerRef.current = sceneManager;
 
-    const navController = new NavigationController(
+    this.navigationController = new NavigationController(
       {
         moveSpeed: 2.5,
         rotateSpeed: 1.5,
         deadzone: 0.15,
       },
       (isActive) => {
-        setNavigationMode(isActive);
+        this.updateState({ navigationMode: isActive });
       }
     );
-    navigationControllerRef.current = navController;
 
-    const furnitureController = new FurnitureEditController(
+    this.furnitureController = new FurnitureEditController(
       {
         moveSpeed: 1.5,
         rotateSpeed: 1.5,
@@ -130,81 +143,20 @@ export function SceneContent({ homeId, digitalHome }: SceneContentProps) {
       },
       {
         onFurnitureMove: async (id, delta) => {
-          const furniture = sceneManager.getFurniture(id);
-          if (!furniture) return;
-
-          const currentPos = furniture.getPosition();
-          const newPos: [number, number, number] = [
-            currentPos[0] + delta.x,
-            currentPos[1] + delta.y,
-            currentPos[2] + delta.z,
-          ];
-
-          const isInAABBZone = currentAABBPositionRef.current !== null;
-
-          const result = await sceneManager.moveFurniture(
-            id, 
-            newPos, 
-            isInAABBZone,
-            false
-          );
-          
-          if (!result.success && result.needsConfirmation) {
-            pendingMoveRef.current = newPos;
-            setShowMoveCloserPanel(true);
-            
-          } else if (result.success && result.needsPreciseCheck) {
-            currentAABBPositionRef.current = newPos;
-            setShowPreciseCheckPanel(true);
-            
-          } else if (!result.success && !result.needsConfirmation) {
-            if (result.reason) {
-              showNotificationMessage(`⚠️ ${result.reason}`, 'error');
-            }
-            currentAABBPositionRef.current = null;
-            
-          } else if (result.success && !result.needsPreciseCheck) {
-            currentAABBPositionRef.current = null;
-          }
+          await this.handleFurnitureMove(id, delta);
         },
         onFurnitureRotate: (id, deltaY) => {
-          const furniture = sceneManager.getFurniture(id);
-          if (!furniture) return;
-
-          const currentRot = furniture.getRotation();
-          const newRot: [number, number, number] = [
-            currentRot[0],
-            currentRot[1] + deltaY,
-            currentRot[2],
-          ];
-
-          sceneManager.rotateFurniture(id, newRot);
-          
-          const twoPi = Math.PI * 2;
-          let normalizedRotation = newRot[1] % twoPi;
-          if (normalizedRotation < 0) normalizedRotation += twoPi;
-          setRotationValue(normalizedRotation);
+          this.handleFurnitureRotate(id, deltaY);
         },
         onFurnitureDeselect: (id) => {
-          sceneManager.deselectFurniture(id);
-          setSelectedItemId(null);
-          setShowSlider(false);
-          currentAABBPositionRef.current = null;
-          pendingMoveRef.current = null;
+          this.handleFurnitureDeselect(id);
         },
       }
     );
-    furnitureControllerRef.current = furnitureController;
+  }
 
-    return () => {
-      sceneManager.dispose();
-      navController.reset();
-      furnitureController.reset();
-    };
-  }, [scene, homeId]);
-
-  useEffect(() => {
-    if (!xr.session || !navigationControllerRef.current) return;
+  setupXRRig(scene: THREE.Scene, camera: THREE.Camera): void {
+    if (!this.navigationController) return;
 
     let rig = scene.getObjectByName("CustomXRRig") as THREE.Group;
     if (!rig) {
@@ -215,207 +167,212 @@ export function SceneContent({ homeId, digitalHome }: SceneContentProps) {
     if (camera.parent !== rig) {
       rig.add(camera);
     }
-    navigationControllerRef.current.setRig(rig);
-  }, [xr.session, scene, camera]);
+    this.navigationController.setRig(rig);
+  }
 
-  useEffect(() => {
-    const loadHome = async () => {
-      if (!sceneManagerRef.current) return;
+  cleanup(): void {
+    this.sceneManager?.dispose();
+    this.navigationController?.reset();
+    this.furnitureController?.reset();
+    this.modelUrlCache.forEach(url => URL.revokeObjectURL(url));
+  }
 
-      try {
-        const response = await makeAuthenticatedRequest(`/digitalhomes/download_digital_home/${homeId}/`);
-        
-        if (response.ok) {
-          const blob = await response.blob();
-          const url = URL.createObjectURL(blob);
-          
-          const homeModel = new HomeModel(
-            homeId,
-            'Digital Home',
-            parseInt(homeId),
-            url,
-            digitalHome?.spatialData?.boundary
-          );
+  async loadHome(digitalHome?: any): Promise<void> {
+    if (!this.sceneManager) return;
 
-          await sceneManagerRef.current.setHomeModel(homeModel);
-        }
-      } catch (error) {
-        console.error('Failed to load home:', error);
+    try {
+      const response = await makeAuthenticatedRequest(
+        `/digitalhomes/download_digital_home/${this.homeId}/`
+      );
+
+      if (response.ok) {
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+
+        const homeModel = new HomeModel(
+          this.homeId,
+          'Digital Home',
+          parseInt(this.homeId),
+          url,
+          digitalHome?.spatialData?.boundary
+        );
+
+        await this.sceneManager.setHomeModel(homeModel);
       }
-    };
+    } catch (error) {
+      console.error('Failed to load home:', error);
+    }
+  }
 
-    loadHome();
-  }, [homeId, digitalHome]);
+  async loadFurnitureCatalog(): Promise<void> {
+    this.updateState({ catalogLoading: true });
+    try {
+      const response = await makeAuthenticatedRequest('/digitalhomes/list_available_items/');
 
-  useEffect(() => {
-    const loadFurnitureCatalog = async () => {
-      setCatalogLoading(true);
-      try {
-        const response = await makeAuthenticatedRequest('/digitalhomes/list_available_items/');
+      if (response.ok) {
+        const data = await response.json();
+        const items = data.available_items.map((item: any) => ({
+          id: item.id.toString(),
+          name: item.name,
+          description: item.description,
+          model_id: item.model_id,
+          image: item.image,
+          category: item.category,
+          type: item.type,
+          is_container: item.is_container,
+        }));
 
-        if (response.ok) {
-          const data = await response.json();
-          const items = data.available_items.map((item: any) => ({
-            id: item.id.toString(),
-            name: item.name,
-            description: item.description,
-            model_id: item.model_id,
-            image: item.image,
-            category: item.category,
-            type: item.type,
-            is_container: item.is_container,
-          }));
+        this.updateState({ furnitureCatalog: items });
 
-          setFurnitureCatalog(items);
-
-          for (const item of items) {
-            await loadFurnitureModel(item.model_id);
-          }
+        for (const item of items) {
+          await this.loadFurnitureModel(item.model_id);
         }
-      } catch (error) {
-        console.error('Error loading furniture catalog:', error);
-      } finally {
-        setCatalogLoading(false);
       }
-    };
+    } catch (error) {
+      console.error('Error loading furniture catalog:', error);
+    } finally {
+      this.updateState({ catalogLoading: false });
+    }
+  }
 
-    loadFurnitureCatalog();
-
-    return () => {
-      modelUrlCache.forEach(url => URL.revokeObjectURL(url));
-    };
-  }, []);
-
-  const loadFurnitureModel = async (modelId: number) => {
-    if (modelUrlCache.has(modelId)) return;
+  private async loadFurnitureModel(modelId: number): Promise<void> {
+    if (this.modelUrlCache.has(modelId)) return;
 
     try {
       const response = await makeAuthenticatedRequest(`/products/get_3d_model/${modelId}/`);
       if (response.ok) {
         const blob = await response.blob();
         const url = URL.createObjectURL(blob);
-        setModelUrlCache(prev => new Map(prev).set(modelId, url));
+        this.modelUrlCache.set(modelId, url);
       }
     } catch (error) {
       console.error(`Error loading model ${modelId}:`, error);
     }
-  };
+  }
 
-  useEffect(() => {
-    const loadDeployedItems = async () => {
-      if (!sceneManagerRef.current || modelUrlCache.size === 0) return;
-      
-      setLoading(true);
-      try {
-        const response = await makeAuthenticatedRequest(`/digitalhomes/get_deployed_items_details/${homeId}/`);
+  async loadDeployedItems(): Promise<void> {
+    if (!this.sceneManager || this.modelUrlCache.size === 0) return;
 
-        if (response.ok) {
-          const data = await response.json();
-
-          for (const itemObj of data.deployed_items) {
-            const itemId = Object.keys(itemObj)[0];
-            const itemData = itemObj[itemId];
-
-            const modelPath = modelUrlCache.get(itemData.model_id);
-            if (!modelPath) continue;
-
-            const metadata: FurnitureMetadata = {
-              description: itemData.description,
-              category: itemData.category,
-              type: itemData.type,
-              isContainer: itemData.is_container,
-            };
-
-            const furniture = new FurnitureItem(
-              itemId,
-              itemData.name,
-              itemData.model_id,
-              modelPath,
-              metadata,
-              {
-                position: itemData.spatialData.positions,
-                rotation: itemData.spatialData.rotation,
-                scale: itemData.spatialData.scale[0],
-              }
-            );
-
-            await sceneManagerRef.current.addFurniture(furniture);
-          }
-          
-          if (sceneManagerRef.current) {
-            setTimeout(async () => {
-              await sceneManagerRef.current!.updateAllCollisions();
-            }, 200);
-          }
-        }
-      } catch (error) {
-        console.error('Error loading deployed items:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    if (modelUrlCache.size > 0) {
-      loadDeployedItems();
-    }
-  }, [homeId, modelUrlCache.size]);
-
-  useFrame((_state, delta) => {
-    const session = xr.session;
-    if (!session) return;
-
-    navigationControllerRef.current?.update(session, camera, delta);
-
-    if (!navigationMode && selectedItemId && furnitureControllerRef.current) {
-      furnitureControllerRef.current.update(session, camera, delta);
-    }
-  });
-
-  const handleToggleUI = () => {
-    if (showMoveCloserPanel || showPreciseCheckPanel) {
-      return;
-    }
-    
-    if (showControlPanel) {
-      setShowControlPanel(false);
-    }
-    if (showInstructions) {
-      setShowInstructions(false);
-      setShowFurniture(true);
-    } else if (showFurniture) {
-      setShowFurniture(false);
-      if (selectedItemId) setShowSlider(true);
-    } else {
-      setShowFurniture(true);
-      setShowSlider(false);
-    }
-  };
-
-  const handleToggleControlPanel = () => {
-    if (showMoveCloserPanel || showPreciseCheckPanel) {
-      return;
-    }
-    
-    setShowControlPanel(prev => {
-      const newState = !prev;
-      if (newState) {
-        setShowFurniture(false);
-        setShowSlider(false);
-        setShowInstructions(false);
-      }
-      return newState;
-    });
-  };
-
-  const handleSaveScene = async () => {
-    if (saving || !sceneManagerRef.current) return;
-    
-    setSaving(true);
+    this.updateState({ loading: true });
     try {
-      const sceneData = sceneManagerRef.current.serializeScene();
-      
+      const response = await makeAuthenticatedRequest(
+        `/digitalhomes/get_deployed_items_details/${this.homeId}/`
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+
+        for (const itemObj of data.deployed_items) {
+          const itemId = Object.keys(itemObj)[0];
+          const itemData = itemObj[itemId];
+
+          const modelPath = this.modelUrlCache.get(itemData.model_id);
+          if (!modelPath) continue;
+
+          const metadata: FurnitureMetadata = {
+            description: itemData.description,
+            category: itemData.category,
+            type: itemData.type,
+            isContainer: itemData.is_container,
+          };
+
+          const furniture = new FurnitureItem(
+            itemId,
+            itemData.name,
+            itemData.model_id,
+            modelPath,
+            metadata,
+            {
+              position: itemData.spatialData.positions,
+              rotation: itemData.spatialData.rotation,
+              scale: itemData.spatialData.scale[0],
+            }
+          );
+
+          await this.sceneManager.addFurniture(furniture);
+        }
+
+        if (this.sceneManager) {
+          setTimeout(async () => {
+            await this.sceneManager!.updateAllCollisions();
+          }, 200);
+        }
+      }
+    } catch (error) {
+      console.error('Error loading deployed items:', error);
+    } finally {
+      this.updateState({ loading: false });
+    }
+  }
+
+  showNotificationMessage(
+    message: string,
+    type: "success" | "error" | "info" = "info",
+    fromControlPanel: boolean = false
+  ): void {
+    this.updateState({
+      showControlPanel: fromControlPanel ? this.state.showControlPanel : false,
+      showMoveCloserPanel: false,
+      showPreciseCheckPanel: false,
+      notificationMessage: message,
+      notificationType: type,
+      notificationFromControlPanel: fromControlPanel,
+      showNotification: true,
+    });
+  }
+
+  handleToggleUI(): void {
+    const { showMoveCloserPanel, showPreciseCheckPanel, showControlPanel, showInstructions, showFurniture, selectedItemId } = this.state;
+
+    if (showMoveCloserPanel || showPreciseCheckPanel) return;
+
+    if (showControlPanel) {
+      this.updateState({ showControlPanel: false });
+    } else if (showInstructions) {
+      this.updateState({ showInstructions: false, showFurniture: true });
+    } else if (showFurniture) {
+      this.updateState({
+        showFurniture: false,
+        showSlider: selectedItemId !== null,
+      });
+    } else {
+      this.updateState({ showFurniture: true, showSlider: false });
+    }
+  }
+
+  handleToggleControlPanel(): void {
+    const { showMoveCloserPanel, showPreciseCheckPanel, showControlPanel } = this.state;
+
+    if (showMoveCloserPanel || showPreciseCheckPanel) return;
+
+    this.updateState({
+      showControlPanel: !showControlPanel,
+      showFurniture: false,
+      showSlider: false,
+      showInstructions: false,
+    });
+  }
+
+  handleHelp(): void {
+    this.updateState({
+      showInstructions: true,
+      showFurniture: false,
+      showSlider: false,
+      showControlPanel: false,
+      showMoveCloserPanel: false,
+      showPreciseCheckPanel: false,
+    });
+  }
+
+  async handleSaveScene(): Promise<void> {
+    if (this.state.saving || !this.sceneManager) return;
+
+    this.updateState({ saving: true });
+    try {
+      const sceneData = this.sceneManager.serializeScene();
+
       const formData = new FormData();
-      formData.append('id', homeId);
+      formData.append('id', this.homeId);
       formData.append('deployedItems', JSON.stringify(sceneData.deployedItems));
 
       const response = await makeAuthenticatedRequest('/digitalhomes/update_home_design/', {
@@ -424,152 +381,211 @@ export function SceneContent({ homeId, digitalHome }: SceneContentProps) {
       });
 
       if (response.ok) {
-        showNotificationMessage('Scene saved successfully!', 'success', true);
+        this.showNotificationMessage('Scene saved successfully!', 'success', true);
       } else {
         const error = await response.json();
-        showNotificationMessage(`Failed to save scene: ${error.error}`, 'error', true);
+        this.showNotificationMessage(`Failed to save scene: ${error.error}`, 'error', true);
       }
     } catch (error) {
       console.error('Error saving scene:', error);
-      showNotificationMessage('Error saving scene. Please try again.', 'error', true);
+      this.showNotificationMessage('Error saving scene. Please try again.', 'error', true);
     } finally {
-      setSaving(false);
+      this.updateState({ saving: false });
     }
-  };
+  }
 
-  const handleHelp = () => {
-    setShowInstructions(true);
-    setShowFurniture(false);
-    setShowSlider(false);
-    setShowControlPanel(false);
-    setShowMoveCloserPanel(false);
-    setShowPreciseCheckPanel(false);
-  };
-
-  const handleBackToHome = async () => {
+  async handleBackToHome(xrStore: any): Promise<void> {
     const session = xrStore.getState().session;
     if (session) {
       try {
         await session.end();
-        setTimeout(() => navigate("/"), 300);
+        setTimeout(() => this.navigate("/"), 300);
       } catch (error) {
         console.error("Error exiting VR session:", error);
-        navigate("/");
+        this.navigate("/");
       }
     } else {
-      navigate("/");
+      this.navigate("/");
     }
-  };
+  }
 
-  const handleLogout = async () => {
+  async handleLogout(): Promise<void> {
     await logout();
     window.location.href = DIGITAL_HOME_PLATFORM_BASE_URL;
-  };
+  }
 
-  const handleConfirmMoveCloser = async () => {
-    if (!selectedItemId || !sceneManagerRef.current || !pendingMoveRef.current) return;
-    
-    setShowMoveCloserPanel(false);
-    setShowControlPanel(false);
-    
-    const result = await sceneManagerRef.current.moveFurniture(
-      selectedItemId,
-      pendingMoveRef.current,
+  private async handleFurnitureMove(id: string, delta: THREE.Vector3): Promise<void> {
+    if (!this.sceneManager) return;
+
+    const furniture = this.sceneManager.getFurniture(id);
+    if (!furniture) return;
+
+    const currentPos = furniture.getPosition();
+    const newPos: [number, number, number] = [
+      currentPos[0] + delta.x,
+      currentPos[1] + delta.y,
+      currentPos[2] + delta.z,
+    ];
+
+    const isInAABBZone = this.currentAABBPosition !== null;
+
+    const result = await this.sceneManager.moveFurniture(id, newPos, isInAABBZone, false);
+
+    if (!result.success && result.needsConfirmation) {
+      this.pendingMove = newPos;
+      this.updateState({ showMoveCloserPanel: true });
+    } else if (result.success && result.needsPreciseCheck) {
+      this.currentAABBPosition = newPos;
+      this.updateState({ showPreciseCheckPanel: true });
+    } else if (!result.success && !result.needsConfirmation) {
+      if (result.reason) {
+        this.showNotificationMessage(`⚠️ ${result.reason}`, 'error');
+      }
+      this.currentAABBPosition = null;
+    } else if (result.success && !result.needsPreciseCheck) {
+      this.currentAABBPosition = null;
+    }
+  }
+
+  private handleFurnitureRotate(id: string, deltaY: number): void {
+    if (!this.sceneManager) return;
+
+    const furniture = this.sceneManager.getFurniture(id);
+    if (!furniture) return;
+
+    const currentRot = furniture.getRotation();
+    const newRot: [number, number, number] = [
+      currentRot[0],
+      currentRot[1] + deltaY,
+      currentRot[2],
+    ];
+
+    this.sceneManager.rotateFurniture(id, newRot);
+
+    const twoPi = Math.PI * 2;
+    let normalizedRotation = newRot[1] % twoPi;
+    if (normalizedRotation < 0) normalizedRotation += twoPi;
+    this.updateState({ rotationValue: normalizedRotation });
+  }
+
+  private handleFurnitureDeselect(id: string): void {
+    if (!this.sceneManager) return;
+
+    this.sceneManager.deselectFurniture(id);
+    this.updateState({ selectedItemId: null, showSlider: false });
+    this.currentAABBPosition = null;
+    this.pendingMove = null;
+  }
+
+  async handleConfirmMoveCloser(): Promise<void> {
+    if (!this.state.selectedItemId || !this.sceneManager || !this.pendingMove) return;
+
+    this.updateState({ showMoveCloserPanel: false, showControlPanel: false });
+
+    const result = await this.sceneManager.moveFurniture(
+      this.state.selectedItemId,
+      this.pendingMove,
       true,
       false
     );
-    
+
     if (result.success && result.needsPreciseCheck) {
-      currentAABBPositionRef.current = pendingMoveRef.current;
-      pendingMoveRef.current = null;
-      setShowPreciseCheckPanel(true);
+      this.currentAABBPosition = this.pendingMove;
+      this.pendingMove = null;
+      this.updateState({ showPreciseCheckPanel: true });
     }
-  };
+  }
 
-  const handleCancelMoveCloser = () => {
-    setShowMoveCloserPanel(false);
-    pendingMoveRef.current = null;
-  };
+  handleCancelMoveCloser(): void {
+    this.updateState({ showMoveCloserPanel: false });
+    this.pendingMove = null;
+  }
 
-  const handleConfirmPreciseCheck = async () => {
-    if (!selectedItemId || !sceneManagerRef.current || !currentAABBPositionRef.current) return;
-    
-    setPreciseCheckInProgress(true);
-    setShowPreciseCheckPanel(false);
-    setShowControlPanel(false);
-    
+  async handleConfirmPreciseCheck(): Promise<void> {
+    if (!this.state.selectedItemId || !this.sceneManager || !this.currentAABBPosition) return;
+
+    this.updateState({
+      preciseCheckInProgress: true,
+      showPreciseCheckPanel: false,
+      showControlPanel: false,
+    });
+
     try {
-      
-      const result = await sceneManagerRef.current.moveFurniture(
-        selectedItemId,
-        currentAABBPositionRef.current,
+      const result = await this.sceneManager.moveFurniture(
+        this.state.selectedItemId,
+        this.currentAABBPosition,
         true,
         true
       );
-      
+
       if (!result.success) {
-        showNotificationMessage('⚠️ Precise overlap detected! Furniture moved back to safe position.', 'error');
-        currentAABBPositionRef.current = null;
+        this.showNotificationMessage(
+          '⚠️ Precise overlap detected! Furniture moved back to safe position.',
+          'error'
+        );
+        this.currentAABBPosition = null;
       } else {
-        showNotificationMessage('✅ Position validated! Furniture can stay here.', 'success');
+        this.showNotificationMessage(
+          '✅ Position validated! Furniture can stay here.',
+          'success'
+        );
       }
     } catch (error) {
       console.error('Error during precise collision check:', error);
-      showNotificationMessage('❌ Error checking collision. Please try again.', 'error');
+      this.showNotificationMessage('❌ Error checking collision. Please try again.', 'error');
     } finally {
-      setPreciseCheckInProgress(false);
+      this.updateState({ preciseCheckInProgress: false });
     }
-  };
+  }
 
-  const handleCancelPreciseCheck = () => {
-    if (!selectedItemId || !sceneManagerRef.current) return;
-    
-    // Revert to last valid position
-    const lastValid = sceneManagerRef.current.getLastValidPosition(selectedItemId);
+  handleCancelPreciseCheck(): void {
+    if (!this.state.selectedItemId || !this.sceneManager) return;
+
+    const lastValid = this.sceneManager.getLastValidPosition(this.state.selectedItemId);
     if (lastValid) {
-      const furniture = sceneManagerRef.current.getFurniture(selectedItemId);
+      const furniture = this.sceneManager.getFurniture(this.state.selectedItemId);
       if (furniture) {
         furniture.setPosition(lastValid);
-        const collisionDetector = sceneManagerRef.current.getCollisionDetector();
-        collisionDetector.updateFurnitureBox(selectedItemId, furniture.getGroup(), furniture.getModelId());
+        const collisionDetector = this.sceneManager.getCollisionDetector();
+        collisionDetector.updateFurnitureBox(
+          this.state.selectedItemId,
+          furniture.getGroup(),
+          furniture.getModelId()
+        );
         furniture.setCollision(false);
       }
     }
-    
-    setShowPreciseCheckPanel(false);
-    currentAABBPositionRef.current = null;
-  };
 
-  const handleSelectFurniture = (f: any) => {
-    if (!sceneManagerRef.current) return;
+    this.updateState({ showPreciseCheckPanel: false });
+    this.currentAABBPosition = null;
+  }
+
+  handleSelectFurniture(f: any, camera: THREE.Camera): void {
+    if (!this.sceneManager) return;
 
     const catalogId = f.id;
-    const allFurniture = sceneManagerRef.current.getAllFurniture();
-    
-    // Check if already placed
+    const allFurniture = this.sceneManager.getAllFurniture();
+
     const existingFurniture = allFurniture.find(item => {
       const placedCatalogId = item.getId().split('-')[0];
       return placedCatalogId === catalogId;
     });
 
     if (existingFurniture) {
-      // Remove furniture
-      sceneManagerRef.current.removeFurniture(existingFurniture.getId());
-      if (selectedItemId === existingFurniture.getId()) {
-        setSelectedItemId(null);
-        setShowSlider(false);
+      this.sceneManager.removeFurniture(existingFurniture.getId());
+      if (this.state.selectedItemId === existingFurniture.getId()) {
+        this.updateState({ selectedItemId: null, showSlider: false });
       }
       return;
     }
 
-    // Add new furniture
-    const modelPath = modelUrlCache.get(f.model_id);
+    const modelPath = this.modelUrlCache.get(f.model_id);
     if (!modelPath) {
       console.warn('Model not loaded yet for:', f.name);
       return;
     }
 
-    const spawnPos = sceneManagerRef.current.calculateSpawnPosition(camera, 2);
+    const spawnPos = this.sceneManager.calculateSpawnPosition(camera, 2);
     const uniqueId = `${f.id}-${Date.now()}`;
 
     const metadata: FurnitureMetadata = {
@@ -589,78 +605,183 @@ export function SceneContent({ homeId, digitalHome }: SceneContentProps) {
       {
         position: spawnPos,
         rotation: [0, 0, 0],
-        scale: sliderValue,
+        scale: this.state.sliderValue,
       }
     );
 
-    sceneManagerRef.current.addFurniture(newFurniture).then(() => {
-      sceneManagerRef.current!.selectFurniture(uniqueId);
-      setSelectedItemId(uniqueId);
-      furnitureControllerRef.current?.setSelectedFurniture(uniqueId);
-      
-      setRotationValue(0);
-      setShowSlider(true);
-      setShowFurniture(false);
+    this.sceneManager.addFurniture(newFurniture).then(() => {
+      this.sceneManager!.selectFurniture(uniqueId);
+      this.furnitureController?.setSelectedFurniture(uniqueId);
+      this.updateState({
+        selectedItemId: uniqueId,
+        rotationValue: 0,
+        showSlider: true,
+        showFurniture: false,
+      });
     });
-  };
+  }
 
-  const handleSelectItem = (id: string) => {
-    if (!sceneManagerRef.current) return;
+  handleSelectItem(id: string): void {
+    if (!this.sceneManager) return;
 
-    if (selectedItemId === id) {
-      sceneManagerRef.current.deselectFurniture(id);
-      setSelectedItemId(null);
-      setShowSlider(false);
-      furnitureControllerRef.current?.setSelectedFurniture(null);
-      currentAABBPositionRef.current = null;
+    if (this.state.selectedItemId === id) {
+      this.sceneManager.deselectFurniture(id);
+      this.furnitureController?.setSelectedFurniture(null);
+      this.updateState({ selectedItemId: null, showSlider: false });
+      this.currentAABBPosition = null;
       return;
     }
 
-    sceneManagerRef.current.selectFurniture(id);
-    setSelectedItemId(id);
-    setShowSlider(true);
-    
-    furnitureControllerRef.current?.setSelectedFurniture(id);
+    this.sceneManager.selectFurniture(id);
+    this.furnitureController?.setSelectedFurniture(id);
 
-    const furniture = sceneManagerRef.current.getFurniture(id);
+    const furniture = this.sceneManager.getFurniture(id);
     if (furniture) {
       const rotation = furniture.getRotation();
       const scale = furniture.getScale();
-      
+
       const twoPi = Math.PI * 2;
       let normalizedRotation = rotation[1] % twoPi;
       if (normalizedRotation < 0) normalizedRotation += twoPi;
-      setRotationValue(normalizedRotation);
-      
+
       const scaleValue = typeof scale === 'number' ? scale : scale[0];
-      setSliderValue(scaleValue);
-    }
-  };
 
-  const handleScaleChange = (newScale: number) => {
-    setSliderValue(newScale);
-    if (selectedItemId && sceneManagerRef.current) {
-      sceneManagerRef.current.scaleFurniture(selectedItemId, newScale);
+      this.updateState({
+        selectedItemId: id,
+        showSlider: true,
+        rotationValue: normalizedRotation,
+        sliderValue: scaleValue,
+      });
     }
-  };
+  }
 
-  const handleRotationSliderChange = (newRotation: number) => {
-    setRotationValue(newRotation);
-    if (selectedItemId && sceneManagerRef.current) {
-      const furniture = sceneManagerRef.current.getFurniture(selectedItemId);
+  handleScaleChange(newScale: number): void {
+    this.updateState({ sliderValue: newScale });
+    if (this.state.selectedItemId && this.sceneManager) {
+      this.sceneManager.scaleFurniture(this.state.selectedItemId, newScale);
+    }
+  }
+
+  handleRotationSliderChange(newRotation: number): void {
+    this.updateState({ rotationValue: newRotation });
+    if (this.state.selectedItemId && this.sceneManager) {
+      const furniture = this.sceneManager.getFurniture(this.state.selectedItemId);
       if (furniture) {
         const currentRot = furniture.getRotation();
-        sceneManagerRef.current.rotateFurniture(selectedItemId, [currentRot[0], newRotation, currentRot[2]]);
+        this.sceneManager.rotateFurniture(this.state.selectedItemId, [
+          currentRot[0],
+          newRotation,
+          currentRot[2],
+        ]);
       }
     }
-  };
+  }
 
-  const placedCatalogIds = React.useMemo(() => {
-    if (!sceneManagerRef.current) return [];
-    return sceneManagerRef.current.getAllFurniture().map(item => item.getId().split('-')[0]);
-  }, [sceneManagerRef.current?.getAllFurniture().length]);
+  getPlacedCatalogIds(): string[] {
+    if (!this.sceneManager) return [];
+    return this.sceneManager.getAllFurniture().map(item => item.getId().split('-')[0]);
+  }
 
-  if (loading) {
+  updateFrame(session: any, camera: THREE.Camera, delta: number): void {
+    if (!session) return;
+
+    this.navigationController?.update(session, camera, delta);
+
+    if (!this.state.navigationMode && this.state.selectedItemId && this.furnitureController) {
+      this.furnitureController.update(session, camera, delta);
+    }
+  }
+}
+
+// Wrapper for R3F hooks
+export function SceneContent({ homeId, digitalHome }: SceneContentProps) {
+  const navigate = useNavigate();
+  const { scene, camera } = useThree();
+  const xr = useXR();
+  const xrStore = useXRStore();
+
+  // State management
+  const [state, setState] = useState<SceneState>({
+    showSlider: false,
+    showFurniture: false,
+    showInstructions: true,
+    showControlPanel: false,
+    showNotification: false,
+    notificationMessage: "",
+    notificationType: "info",
+    notificationFromControlPanel: false,
+    showMoveCloserPanel: false,
+    showPreciseCheckPanel: false,
+    preciseCheckInProgress: false,
+    saving: false,
+    loading: true,
+    navigationMode: false,
+    selectedItemId: null,
+    sliderValue: 1.0,
+    rotationValue: 0,
+    furnitureCatalog: [],
+    catalogLoading: false,
+  });
+
+  const logicRef = useRef<SceneContentLogic | null>(null);
+
+  useEffect(() => {
+    const updateState = (update: Partial<SceneState> | ((prev: SceneState) => Partial<SceneState>)) => {
+      setState(prev => {
+        const newState = typeof update === 'function' ? update(prev) : update;
+        return { ...prev, ...newState };
+      });
+    };
+
+    logicRef.current = new SceneContentLogic(homeId, navigate, updateState);
+    logicRef.current.initializeManagers(scene);
+
+    return () => {
+      logicRef.current?.cleanup();
+    };
+  }, [homeId, navigate, scene]);
+
+  useEffect(() => {
+    if (!xr.session || !logicRef.current) return;
+    logicRef.current.setupXRRig(scene, camera);
+  }, [xr.session, scene, camera]);
+
+  // Load home
+  useEffect(() => {
+    if (!logicRef.current) return;
+    logicRef.current.loadHome(digitalHome);
+  }, [homeId, digitalHome]);
+
+  // Load furniture catalog
+  useEffect(() => {
+    if (!logicRef.current) return;
+    logicRef.current.loadFurnitureCatalog();
+  }, []);
+
+  // Load deployed items
+  useEffect(() => {
+    if (!logicRef.current || logicRef.current.modelUrlCache.size === 0) return;
+    logicRef.current.loadDeployedItems();
+  }, [logicRef.current?.modelUrlCache.size]);
+
+  useFrame((_state, delta) => {
+    const session = xr.session;
+    if (!session || !logicRef.current) return;
+    logicRef.current.updateFrame(session, camera, delta);
+  });
+
+  if (!logicRef.current) return null;
+
+  const logic = logicRef.current;
+  const uiLocked = state.showFurniture || 
+    state.showControlPanel || 
+    state.showInstructions || 
+    state.showSlider || 
+    state.showNotification ||
+    state.showMoveCloserPanel ||
+    state.showPreciseCheckPanel;
+
+  if (state.loading) {
     return (
       <>
         <color args={["#808080"]} attach="background" />
@@ -685,22 +806,20 @@ export function SceneContent({ homeId, digitalHome }: SceneContentProps) {
       <Environment preset="warehouse" />
 
       <group position={[0, 0, 0]}>
-        {sceneManagerRef.current && (
+        {logic.sceneManager && (
           <>
-            {/* Home Model */}
-            {sceneManagerRef.current.getHomeModel() && (
-              <primitive object={sceneManagerRef.current.getHomeModel()!.getGroup()} />
+            {logic.sceneManager.getHomeModel() && (
+              <primitive object={logic.sceneManager.getHomeModel()!.getGroup()} />
             )}
             
-            {/* Furniture Items */}
-            {sceneManagerRef.current.getAllFurniture().map((furniture) => (
+            {logic.sceneManager.getAllFurniture().map((furniture) => (
               <primitive
                 key={furniture.getId()}
                 object={furniture.getGroup()}
                 onClick={(e: any) => {
-                  if (!navigationMode && !uiLocked) {
+                  if (!state.navigationMode && !uiLocked) {
                     e.stopPropagation();
-                    handleSelectItem(furniture.getId());
+                    logic.handleSelectItem(furniture.getId());
                   }
                 }}
               />
@@ -709,90 +828,90 @@ export function SceneContent({ homeId, digitalHome }: SceneContentProps) {
         )}
       </group>
       
-      <CatalogToggle onToggle={handleToggleUI} />
-      <ControlPanelToggle onToggle={handleToggleControlPanel} />
+      <CatalogToggle onToggle={() => logic.handleToggleUI()} />
+      <ControlPanelToggle onToggle={() => logic.handleToggleControlPanel()} />
 
-      <HeadLockedUI distance={1.6} verticalOffset={0} enabled={showInstructions}>
-        <VRInstructionPanel show={showInstructions} onClose={() => setShowInstructions(false)} />
+      <HeadLockedUI distance={1.6} verticalOffset={0} enabled={state.showInstructions}>
+        <VRInstructionPanel 
+          show={state.showInstructions} 
+          onClose={() => logic.updateState({ showInstructions: false })} 
+        />
       </HeadLockedUI>
 
-      <HeadLockedUI distance={1.7} verticalOffset={0} enabled={showFurniture}>
+      <HeadLockedUI distance={1.7} verticalOffset={0} enabled={state.showFurniture}>
         <VRFurniturePanel
-          show={showFurniture}
-          catalog={furnitureCatalog}
-          loading={catalogLoading}
-          onSelectItem={handleSelectFurniture}
-          placedFurnitureIds={placedCatalogIds}
+          show={state.showFurniture}
+          catalog={state.furnitureCatalog}
+          loading={state.catalogLoading}
+          onSelectItem={(f) => logic.handleSelectFurniture(f, camera)}
+          placedFurnitureIds={logic.getPlacedCatalogIds()}
         />
       </HeadLockedUI>
 
-      <HeadLockedUI distance={1.7} verticalOffset={0} enabled={showControlPanel}>
+      <HeadLockedUI distance={1.7} verticalOffset={0} enabled={state.showControlPanel}>
         <VRControlPanel
-          show={showControlPanel}
-          onSave={handleSaveScene}
-          onHelp={handleHelp}
-          onBack={handleBackToHome}
-          onLogout={handleLogout}
-          saving={saving}
-          onClose={() => setShowControlPanel(false)}
+          show={state.showControlPanel}
+          onSave={() => logic.handleSaveScene()}
+          onHelp={() => logic.handleHelp()}
+          onBack={() => logic.handleBackToHome(xrStore)}
+          onLogout={() => logic.handleLogout()}
+          saving={state.saving}
+          onClose={() => logic.updateState({ showControlPanel: false })}
         />
       </HeadLockedUI>
 
-      <HeadLockedUI distance={1.4} enabled={showSlider && selectedItemId !== null}>
+      <HeadLockedUI distance={1.4} enabled={state.showSlider && state.selectedItemId !== null}>
         <group>
           <VRSlider
-            show={showSlider && selectedItemId !== null}
-            value={sliderValue}
-            onChange={handleScaleChange}
+            show={state.showSlider && state.selectedItemId !== null}
+            value={state.sliderValue}
+            onChange={(v: number) => logic.handleScaleChange(v)}
             label="Scale"
             min={0.1}
             max={2}
             position={[0, 0.3, 0]}
-            onClose={() => setShowSlider(false)}
+            onClose={() => logic.updateState({ showSlider: false })}
           />
           <VRSlider
             show={null}
-            value={rotationValue}
-            onChange={handleRotationSliderChange}
+            value={state.rotationValue}
+            onChange={(v: number) => logic.handleRotationSliderChange(v)}
             label="Rotation"
             min={0}
             max={Math.PI * 2}
             position={[0, -0.75, 0]}
             showDegrees={true}
-            onClose={() => setShowSlider(false)}
+            onClose={() => logic.updateState({ showSlider: false })}
           />
         </group>
       </HeadLockedUI>
 
-      <HeadLockedUI distance={1.4} verticalOffset={0} enabled={showNotification}>
+      <HeadLockedUI distance={1.4} verticalOffset={0} enabled={state.showNotification}>
         <VRNotificationPanel
-          show={showNotification}
-          message={notificationMessage}
-          type={notificationType}
-          onClose={() => {
-            setShowNotification(false);
-            setNotificationFromControlPanel(false);
-          }}
+          show={state.showNotification}
+          message={state.notificationMessage}
+          type={state.notificationType}
+          onClose={() => logic.updateState({ showNotification: false, notificationFromControlPanel: false })}
         />
       </HeadLockedUI>
 
-      <HeadLockedUI distance={1.5} verticalOffset={0} enabled={showMoveCloserPanel}>
+      <HeadLockedUI distance={1.5} verticalOffset={0} enabled={state.showMoveCloserPanel}>
         <VRPreciseCollisionPanel
-          show={showMoveCloserPanel}
-          onConfirm={handleConfirmMoveCloser}
-          onCancel={handleCancelMoveCloser}
+          show={state.showMoveCloserPanel}
+          onConfirm={() => logic.handleConfirmMoveCloser()}
+          onCancel={() => logic.handleCancelMoveCloser()}
           isChecking={false}
           title="Move Furniture Closer?"
           message="The furniture is close to another object. Do you want to move it closer?"
         />
       </HeadLockedUI>
 
-      <HeadLockedUI distance={1.5} verticalOffset={0} enabled={showPreciseCheckPanel}>
+      <HeadLockedUI distance={1.5} verticalOffset={0} enabled={state.showPreciseCheckPanel}>
         <VRPreciseCollisionPanel
-          show={showPreciseCheckPanel}
-          onConfirm={handleConfirmPreciseCheck}
-          onCancel={handleCancelPreciseCheck}
-          isChecking={preciseCheckInProgress}
+          show={state.showPreciseCheckPanel}
+          onConfirm={() => logic.handleConfirmPreciseCheck()}
+          onCancel={() => logic.handleCancelPreciseCheck()}
+          isChecking={state.preciseCheckInProgress}
           title="Use precise collision detection?"
           message="Run precise API check to verify overlap? (Click No to move back to safe position)"
         />
