@@ -16,8 +16,8 @@ export function VRPreciseCollisionPanel({
   onConfirm,
   onCancel,
   isChecking = false,
-  title = "AABB Collision Detected",
-  message = "The furniture is close to another object.\n\nRun precise collision check to move closer?\n(This may take a moment)",
+  title = "The furniture is close to another object.",
+  message = "Run precise collision check to move closer? (This may take a moment)",
 }: VRPreciseCollisionPanelProps) {
   const [hoveredButton, setHoveredButton] = React.useState<string | null>(null);
 
@@ -53,10 +53,6 @@ export function VRPreciseCollisionPanel({
 
       {/* Warning Icon */}
       <group position={[0, 0.18, 0.01]}>
-        <mesh>
-          <circleGeometry args={[0.06, 3]} />
-          <meshStandardMaterial color="#F59E0B" />
-        </mesh>
         <Text
           position={[0, -0.01, 0.01]}
           fontSize={0.05}
@@ -127,7 +123,7 @@ export function VRPreciseCollisionPanel({
           anchorY="middle"
           fontWeight="semi-bold"
         >
-          {isChecking ? "Checking..." : "✓ Yes"}
+          {isChecking ? "Checking..." : "Yes"}
         </Text>
       </group>
 
@@ -176,7 +172,7 @@ export function VRPreciseCollisionPanel({
           anchorY="middle"
           fontWeight="semi-bold"
         >
-          ✗ No
+          No
         </Text>
       </group>
 

@@ -3,7 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { Canvas } from "@react-three/fiber";
 import { createXRStore, XR } from "@react-three/xr";
 import { makeAuthenticatedRequest } from "../utils/Auth";
-import { SceneContentOOP } from "../components/scene/SceneContentOOP";
+import { SceneContent } from "../components/scene/SceneContent";
 
 const xrStore = createXRStore();
 
@@ -127,7 +127,7 @@ export function SceneCreator() {
     <div style={{ width: '100vw', height: '100vh', position: 'relative' }}>
       <Canvas style={{ width: "100vw", height: "100vh", position: "fixed" }}>
         <XR store={xrStore}>
-          {homeId && <SceneContentOOP homeId={homeId} digitalHome={digitalHome} />}
+          {homeId && <SceneContent homeId={homeId} digitalHome={digitalHome} />}
         </XR>
       </Canvas>
 
