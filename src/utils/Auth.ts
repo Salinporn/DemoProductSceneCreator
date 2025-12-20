@@ -21,14 +21,11 @@ export async function verifyLoginToken(token: string): Promise<LoginTokenRespons
     const response = await fetch(`${API_BASE_URL}/users/verify_login_token/`, {
       method: 'POST',
       body: formData,
-      credentials: 'include', // Important: send/receive cookies
+      credentials: 'include',
     });
 
     if (response.ok) {
       const data: LoginTokenResponse = await response.json();
-      console.log('✅ Token verified, logged in as:', data.username);
-      
-      // Store user info in localStorage
       localStorage.setItem('username', data.username);
       localStorage.setItem('user_id', data.user_id.toString());
       localStorage.setItem('is_authenticated', 'true');
@@ -55,7 +52,6 @@ export async function checkAuth(): Promise<AuthResponse> {
     if (response.ok) {
       const data: AuthResponse = await response.json();
       
-      // Update localStorage based on server response
       if (data.logged_in) {
         localStorage.setItem('is_authenticated', 'true');
         if (data.username) {
@@ -77,12 +73,10 @@ export async function checkAuth(): Promise<AuthResponse> {
   }
 }
 
-// Check if user is authenticated from localStorage
 export function isAuthenticated(): boolean {
   return localStorage.getItem('is_authenticated') === 'true';
 }
 
-// Get stored username
 export function getUsername(): string | null {
   return localStorage.getItem('username');
 }
