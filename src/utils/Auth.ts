@@ -22,6 +22,7 @@ export async function verifyLoginToken(token: string): Promise<LoginTokenRespons
       method: 'POST',
       body: formData,
       credentials: 'include',
+      mode: 'cors',
     });
 
     if (response.ok) {
@@ -47,6 +48,7 @@ export async function checkAuth(): Promise<AuthResponse> {
   try {
     const response = await fetch(`${API_BASE_URL}/users/is_logged_in/`, {
       credentials: 'include',
+      mode: 'cors',
     });
     
     if (response.ok) {
@@ -81,42 +83,12 @@ export function getUsername(): string | null {
   return localStorage.getItem('username');
 }
 
-// Logout user
-export async function logout(): Promise<void> {
-  try {
-    console.log('📤 Sending logout request...');
-    const response = await fetch(`${API_BASE_URL}/users/logout/`, {
-      method: 'DELETE',
-      credentials: 'include',
-    });
-    
-    if (response.ok) {
-      console.log('✅ Logout successful');
-    } else {
-      console.warn('⚠️ Logout request failed, but continuing...');
-    }
-  } catch (error) {
-    console.error('❌ Logout request error:', error);
-  }
-  
-  // Clear local storage
+export function getUserId(): string | null {
+  return localStorage.getItem('user_id');
+}
+
+export function clearAuth(): void {
   localStorage.removeItem('is_authenticated');
   localStorage.removeItem('username');
   localStorage.removeItem('user_id');
-  
-  console.log('🧹 Local storage cleared');
-}
-
-// Make an authenticated API request
-export async function makeAuthenticatedRequest(
-  endpoint: string,
-  options: RequestInit = {}
-): Promise<Response> {
-  return fetch(`${API_BASE_URL}${endpoint}`, {
-    ...options,
-    credentials: 'include', // Always include cookies
-    headers: {
-      ...options.headers,
-    },
-  });
 }

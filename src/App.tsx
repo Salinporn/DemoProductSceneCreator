@@ -1,14 +1,12 @@
-import { HashRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { Login } from './pages/auth/Login';
-import { Home } from './pages/Home';
+import { ProductDemo } from './pages/ProductDemo';
 import { NotAuthorized } from './pages/auth/NotAuthorized';
-import { SceneCreator } from './pages/SceneCreator';
 import { ProtectedRoute } from './pages/auth/ProtectedRoute';
-import { AddModel } from './pages/AddModel';
 
 function App() {
   return (
-    <HashRouter>
+    <Router>
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/unauthorized" element={<NotAuthorized />} />
@@ -16,28 +14,13 @@ function App() {
           path="/"
           element={
             <ProtectedRoute>
-              <Home />
+              <ProductDemo />
             </ProtectedRoute>
           }
         />
-        <Route
-          path="/scene/:homeId"
-          element={
-            <ProtectedRoute>
-              <SceneCreator />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/add-model"
-          element={
-            <ProtectedRoute>
-              <AddModel />
-            </ProtectedRoute>
-          }
-        />
+        <Route path="*" element={<Login />} />
       </Routes>
-    </HashRouter>
+    </Router>
   );
 }
 
