@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 export interface Transform {
   position: [number, number, number];
@@ -6,7 +7,7 @@ export interface Transform {
   scale: number | [number, number, number];
 }
 
-export abstract class Base3DObject {
+export class ProductModel {
   protected id: string;
   protected name: string;
   protected modelId: number;
@@ -14,6 +15,7 @@ export abstract class Base3DObject {
   protected transform: Transform;
   protected group: THREE.Group;
   protected modelGroup: THREE.Group;
+  protected loader: GLTFLoader;
 
   constructor(
     id: string,
@@ -37,6 +39,7 @@ export abstract class Base3DObject {
     this.modelGroup = new THREE.Group();
     this.group.add(this.modelGroup);
     
+    this.loader = new GLTFLoader();
     this.updateTransform();
   }
 
@@ -98,19 +101,28 @@ export abstract class Base3DObject {
     }
 
     try {
-      const model = await this.fetchModel(this.modelPath);
-      this.setupModel(model);
-      this.onModelLoaded(model);
+      const gltf = await new Promise<any>((resolve, reject) => {
+        this.loader.load(
+          this.modelPath!,
+          (gltf) => resolve(gltf),
+          undefined,
+          reject
+        );
+      });
+
+      const clonedModel = gltf.scene.clone();
+      this.modelGroup.clear();
+      
+      // Align to floor
+      const box = new THREE.Box3().setFromObject(clonedModel);
+      const minY = box.min.y;
+      clonedModel.position.y = -minY;
+      
+      this.modelGroup.add(clonedModel);
     } catch (error) {
       console.error(`Failed to load model for ${this.name}:`, error);
-      this.onModelLoadError(error);
     }
   }
-
-  protected abstract fetchModel(path: string): Promise<THREE.Group>;
-  protected abstract setupModel(model: THREE.Group): void;
-  protected abstract onModelLoaded(model: THREE.Group): void;
-  protected abstract onModelLoadError(error: unknown): void;
 
   dispose(): void {
     this.group.traverse((child) => {

@@ -1,26 +1,15 @@
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import { Login } from './pages/auth/Login';
-import { ProductDemo } from './pages/ProductDemo';
-import { NotAuthorized } from './pages/auth/NotAuthorized';
-import { ProtectedRoute } from './pages/auth/ProtectedRoute';
+import { Routes, Route, Navigate } from 'react-router-dom';
+import { DemoProductSceneCreator } from './pages/DemoProductSceneCreator';
 
 function App() {
   return (
-    <Router>
-      <Routes>
-        <Route path="/login" element={<Login />} />
-        <Route path="/unauthorized" element={<NotAuthorized />} />
-        <Route
-          path="/"
-          element={
-            <ProtectedRoute>
-              <ProductDemo />
-            </ProtectedRoute>
-          }
-        />
-        <Route path="*" element={<Login />} />
-      </Routes>
-    </Router>
+    <Routes>
+      <Route path="/login" element={<DemoProductSceneCreator />} />
+      <Route path="/" element={<DemoProductSceneCreator />} />
+      
+      {/* Fallback */}
+      <Route path="*" element={<Navigate to="/login" replace />} />
+    </Routes>
   );
 }
 

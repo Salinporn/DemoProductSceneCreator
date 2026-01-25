@@ -28,22 +28,7 @@ export abstract class XRControllerBase {
     return this.config.enabled;
   }
 
-  setMoveSpeed(speed: number): void {
-    this.config.moveSpeed = speed;
-  }
-
-  setRotateSpeed(speed: number): void {
-    this.config.rotateSpeed = speed;
-  }
-
-  setDeadzone(deadzone: number): void {
-    this.config.deadzone = deadzone;
-  }
-
-  protected isButtonPressed(
-    inputSource: any,
-    buttonIndex: number
-  ): boolean {
+  protected isButtonPressed(inputSource: any, buttonIndex: number): boolean {
     const gamepad = inputSource.gamepad;
     if (!gamepad || !gamepad.buttons) return false;
     
@@ -65,10 +50,7 @@ export abstract class XRControllerBase {
     return justPressed;
   }
 
-  protected getAxisValue(
-    inputSource: any,
-    axisIndex: number
-  ): number {
+  protected getAxisValue(inputSource: any, axisIndex: number): number {
     const gamepad = inputSource.gamepad;
     if (!gamepad || !gamepad.axes || axisIndex >= gamepad.axes.length) return 0;
     
@@ -80,13 +62,7 @@ export abstract class XRControllerBase {
     return Math.abs(value) > this.config.deadzone;
   }
 
-
-  abstract update(
-    session: any,
-    camera: THREE.Camera,
-    delta: number
-  ): void;
-  
+  abstract update(session: any, camera: THREE.Camera, delta: number): void;
   abstract reset(): void;
 }
 
@@ -116,11 +92,7 @@ export class NavigationController extends XRControllerBase {
     return this.isNavigating;
   }
 
-  update(
-    session: any,
-    camera: THREE.Camera,
-    delta: number
-  ): void {
+  update(session: any, camera: THREE.Camera, delta: number): void {
     if (!this.config.enabled || !this.rig || !session || !session.inputSources) return;
 
     let isGripPressed = false;
@@ -187,67 +159,39 @@ export class NavigationController extends XRControllerBase {
   }
 }
 
-// FurnitureController
-export class FurnitureEditController extends XRControllerBase {
-  private selectedFurnitureId: string | null = null;
-  private onFurnitureMove?: (id: string, delta: THREE.Vector3) => void;
-  private onFurnitureRotate?: (id: string, deltaY: number) => void;
-  private onFurnitureDeselect?: (id: string) => void;
+// ProductEditController
+export class ProductEditController extends XRControllerBase {
+  private onProductMove?: (delta: THREE.Vector3) => void;
+  private onProductRotate?: (deltaY: number) => void;
+  private onProductScale?: (delta: number) => void;
 
   constructor(
     config: ControllerConfig = {},
     callbacks?: {
-      onFurnitureMove?: (id: string, delta: THREE.Vector3) => void;
-      onFurnitureRotate?: (id: string, deltaY: number) => void;
-      onFurnitureDeselect?: (id: string) => void;
+      onProductMove?: (delta: THREE.Vector3) => void;
+      onProductRotate?: (deltaY: number) => void;
+      onProductScale?: (delta: number) => void;
     }
   ) {
     super(config);
-    this.onFurnitureMove = callbacks?.onFurnitureMove;
-    this.onFurnitureRotate = callbacks?.onFurnitureRotate;
-    this.onFurnitureDeselect = callbacks?.onFurnitureDeselect;
+    this.onProductMove = callbacks?.onProductMove;
+    this.onProductRotate = callbacks?.onProductRotate;
+    this.onProductScale = callbacks?.onProductScale;
   }
 
-  setSelectedFurniture(id: string | null): void {
-    this.selectedFurnitureId = id;
-  }
-
-  getSelectedFurniture(): string | null {
-    return this.selectedFurnitureId;
-  }
-
-  update(
-    session: any,
-    camera: THREE.Camera,
-    delta: number
-  ): void {
-    if (!this.config.enabled || !this.selectedFurnitureId || !session || !session.inputSources) return;
-
-    let shouldCheckInputs = true;
-    session.inputSources.forEach((source: any, index: number) => {
-      const gamepad = source.gamepad;
-      if (!gamepad || !gamepad.buttons) return;
-
-      const gripButton = gamepad.buttons[1];
-      if (this.wasButtonJustPressed(index, 1, gripButton?.pressed || false)) {
-        if (this.selectedFurnitureId) {
-          this.onFurnitureDeselect?.(this.selectedFurnitureId);
-          this.selectedFurnitureId = null;
-          shouldCheckInputs = false;
-        }
-      }
-    });
-
-    if (!this.selectedFurnitureId || !shouldCheckInputs) return;
+  update(session: any, camera: THREE.Camera, delta: number): void {
+    if (!this.config.enabled || !session || !session.inputSources) return;
 
     let moveX = 0;
     let moveZ = 0;
     let rotateInput = 0;
+    let scaleInput = 0;
 
     session.inputSources.forEach((source: any) => {
       const gamepad = source.gamepad;
       if (!gamepad) return;
 
+      // Right controller - movement
       if (source.handedness === "right" && gamepad.axes.length >= 4) {
         const x = this.getAxisValue(source, 2);
         const z = this.getAxisValue(source, 3);
@@ -255,9 +199,12 @@ export class FurnitureEditController extends XRControllerBase {
         if (this.isAxisActive(z)) moveZ = z;
       }
 
-      if (source.handedness === "left" && gamepad.axes.length >= 3) {
+      // Left controller - rotation and scale
+      if (source.handedness === "left" && gamepad.axes.length >= 4) {
         const r = this.getAxisValue(source, 2);
+        const s = this.getAxisValue(source, 3);
         if (this.isAxisActive(r)) rotateInput = -r;
+        if (this.isAxisActive(s)) scaleInput = s;
       }
     });
 
@@ -274,17 +221,21 @@ export class FurnitureEditController extends XRControllerBase {
       deltaPosition.addScaledVector(forward, -moveZ * this.config.moveSpeed * delta);
       deltaPosition.addScaledVector(right, moveX * this.config.moveSpeed * delta);
 
-      this.onFurnitureMove?.(this.selectedFurnitureId, deltaPosition);
+      this.onProductMove?.(deltaPosition);
     }
 
     if (Math.abs(rotateInput) > 0) {
       const deltaRotation = rotateInput * this.config.rotateSpeed * delta;
-      this.onFurnitureRotate?.(this.selectedFurnitureId, deltaRotation);
+      this.onProductRotate?.(deltaRotation);
+    }
+
+    if (Math.abs(scaleInput) > 0) {
+      const deltaScale = scaleInput * 0.5 * delta;
+      this.onProductScale?.(deltaScale);
     }
   }
 
   reset(): void {
-    this.selectedFurnitureId = null;
     this.prevButtonState.clear();
   }
 }

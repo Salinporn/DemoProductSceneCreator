@@ -11,7 +11,6 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
   const [authenticated, setAuthenticated] = useState(false);
 
   useEffect(() => {
-    // First check localStorage for quick response
     const localAuth = isAuthenticated();
     
     if (!localAuth) {
