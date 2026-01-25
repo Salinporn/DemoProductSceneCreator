@@ -15,33 +15,23 @@ export function Login() {
     const token = searchParams.get('token');
     const productId = searchParams.get('productId');
     const sceneId = searchParams.get('sceneId');
-    const api = searchParams.get('api');
     
     if (!token) {
       setStatus('error');
       setMessage('No authentication token provided');
-      setErrorDetails('Please access Product Demo from the Digital Home Platform product page.');
+      setErrorDetails('Please access Product Demo from the Digital Home Platform.');
       return;
     }
-
-    console.log('🔐 Starting authentication...');
-    console.log('📦 Product ID:', productId);
-    console.log('🏠 Scene ID:', sceneId);
-    console.log('🌐 API:', api);
     
     verifyLoginToken(token).then((result) => {
       if (result) {
         setStatus('success');
         setMessage(`Welcome, ${result.username}!`);
         
-        // Build redirect URL with parameters
         const redirectUrl = new URL('/', window.location.origin);
         if (productId) redirectUrl.searchParams.set('productId', productId);
         if (sceneId) redirectUrl.searchParams.set('sceneId', sceneId);
         
-        console.log('✅ Authentication successful, redirecting to:', redirectUrl.pathname + redirectUrl.search);
-        
-        // Redirect to main app after 1.5 seconds
         setTimeout(() => {
           navigate(redirectUrl.pathname + redirectUrl.search, { replace: true });
         }, 1500);
@@ -50,7 +40,6 @@ export function Login() {
         setMessage('Authentication failed');
         setErrorDetails('The authentication token is invalid or has expired. Please try again from the Digital Home Platform.');
         
-        // Auto-redirect to platform after 5 seconds
         setTimeout(() => {
           window.location.href = DIGITAL_HOME_PLATFORM_BASE_URL;
         }, 5000);
@@ -96,30 +85,6 @@ export function Login() {
           </>
         )}
 
-        {status === 'success' && (
-          <>
-            <div style={{
-              width: '80px',
-              height: '80px',
-              background: '#10b981',
-              borderRadius: '50%',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              margin: '0 auto 1.5rem',
-              fontSize: '2.5rem',
-            }}>
-              ✓
-            </div>
-            <h2 style={{ color: '#1e293b', marginBottom: '0.5rem' }}>
-              {message}
-            </h2>
-            <p style={{ color: '#64748b', fontSize: '0.9rem' }}>
-              Redirecting to Product Demo...
-            </p>
-          </>
-        )}
-
         {status === 'error' && (
           <>
             <div style={{
@@ -158,7 +123,7 @@ export function Login() {
               onMouseOver={(e) => e.currentTarget.style.background = '#2563eb'}
               onMouseOut={(e) => e.currentTarget.style.background = '#3b82f6'}
             >
-              Return to Shop
+              Return to Digital Home Platform
             </a>
           </>
         )}
