@@ -6,6 +6,9 @@ import * as THREE from "three";
 import { HeadLockedUI } from "../panel/common/HeadLockedUI";
 import { VRInstructionPanel } from "../panel/VRInstructionPanel";
 import { VRNotificationPanel } from "../panel/common/NotificationPanel";
+import { VRSidebar } from "../panel/VRSidebar";
+import { VRProductCatalogPanel, StoreProduct } from "../panel/VRProductCatalogPanel";
+import { VRSceneCatalogPanel, SceneEntry } from "../panel/VRSceneCatalogPanel";
 import { NavigationController, ProductEditController } from "../../core/controllers/XRProductController";
 import { makeAuthenticatedRequest } from "../../utils/Api";
 import { ProductModel } from "../../core/objects/ProductModel";
@@ -28,22 +31,28 @@ interface DemoState {
   navigationMode: boolean;
   productScale: number;
   productRotationY: number;
+
+  activePanel: "products" | "scenes" | "instructions" | null;
+  allProducts: StoreProduct[];
+  productsLoading: boolean;
+  currentProductId: string;
+  currentSceneId: string | null;
+  scenes: SceneEntry[];
+  scenesLoading: boolean;
 }
 
 class DemoSceneLogic {
   private state: DemoState;
   private setState: (updater: Partial<DemoState>) => void;
-  private productId: string;
-  private sceneId: string | null;
-  private productName: string | null;
 
-  // Managers
   public sceneManager: DemoSceneManager | null = null;
   public navigationController: NavigationController | null = null;
   public productController: ProductEditController | null = null;
 
-  // Model URL cache
   public modelUrlCache: Map<number, string> = new Map();
+  public sceneUrlCache: Map<number, string> = new Map();
+
+  private sceneEntryMap: Map<string, SceneEntry> = new Map();
 
   constructor(
     productId: string,
@@ -51,11 +60,7 @@ class DemoSceneLogic {
     productName: string | null,
     setState: (updater: Partial<DemoState>) => void
   ) {
-    this.productId = productId;
-    this.sceneId = sceneId;
-    this.productName = productName;
     this.setState = setState;
-
     this.state = {
       showInstructions: true,
       showNotification: false,
@@ -65,6 +70,13 @@ class DemoSceneLogic {
       navigationMode: false,
       productScale: 1.0,
       productRotationY: 0,
+      activePanel: null,
+      allProducts: [],
+      productsLoading: true,
+      currentProductId: productId,
+      currentSceneId: sceneId,
+      scenes: [],
+      scenesLoading: true,
     };
   }
 
@@ -81,48 +93,29 @@ class DemoSceneLogic {
     this.sceneManager = new DemoSceneManager(scene);
 
     this.navigationController = new NavigationController(
-      {
-        moveSpeed: 2.5,
-        rotateSpeed: 1.5,
-        deadzone: 0.15,
-      },
-      (isActive) => {
-        this.updateState({ navigationMode: isActive });
-      }
+      { moveSpeed: 2.5, rotateSpeed: 1.5, deadzone: 0.15 },
+      (isActive) => this.updateState({ navigationMode: isActive })
     );
 
     this.productController = new ProductEditController(
+      { moveSpeed: 1.5, rotateSpeed: 1.5, deadzone: 0.1 },
       {
-        moveSpeed: 1.5,
-        rotateSpeed: 1.5,
-        deadzone: 0.1,
-      },
-      {
-        onProductMove: (delta) => {
-          this.handleProductMove(delta);
-        },
-        onProductRotate: (deltaY) => {
-          this.handleProductRotate(deltaY);
-        },
-        onProductScale: (delta) => {
-          this.handleProductScale(delta);
-        },
+        onProductMove: (delta) => this.handleProductMove(delta),
+        onProductRotate: (deltaY) => this.handleProductRotate(deltaY),
+        onProductScale: (delta) => this.handleProductScale(delta),
       }
     );
   }
 
   setupXRRig(scene: THREE.Scene, camera: THREE.Camera): void {
     if (!this.navigationController) return;
-
     let rig = scene.getObjectByName("CustomXRRig") as THREE.Group;
     if (!rig) {
       rig = new THREE.Group();
       rig.name = "CustomXRRig";
       scene.add(rig);
     }
-    if (camera.parent !== rig) {
-      rig.add(camera);
-    }
+    if (camera.parent !== rig) rig.add(camera);
     this.navigationController.setRig(rig);
   }
 
@@ -130,88 +123,213 @@ class DemoSceneLogic {
     this.sceneManager?.dispose();
     this.navigationController?.reset();
     this.productController?.reset();
-    this.modelUrlCache.forEach(url => URL.revokeObjectURL(url));
+    this.modelUrlCache.forEach((url) => URL.revokeObjectURL(url));
+    this.sceneUrlCache.forEach((url) => URL.revokeObjectURL(url));
   }
 
   async loadScene(): Promise<void> {
-    if (!this.sceneManager) return;
-
+    if (!this.sceneManager || !this.state.currentSceneId) return;
     try {
-      // Load scene (or use default if no sceneId)
-      if (this.sceneId) {
-        const response = await makeAuthenticatedRequest(
-          `/products/get_display_scene/${this.sceneId}/`
-        );
+      const sceneId = this.state.currentSceneId;
+      const entry = this.sceneEntryMap.get(String(sceneId));
 
-        if (response.ok) {
-          const blob = await response.blob();
-          const url = URL.createObjectURL(blob);
+      let endpoint: string;
+      let cacheKey: number;
+      let sceneLabel: string;
 
-          const sceneModel = new SceneModel(
-            this.sceneId,
-            'Product Scene',
-            parseInt(this.sceneId),
-            url
-          );
-
-          await this.sceneManager.setSceneModel(sceneModel);
-        }
+      if (entry?.type === "digital_home" && entry.homeId != null) {
+        endpoint = `/digitalhomes/download_digital_home/${entry.homeId}/`;
+        cacheKey = entry.homeId;
+        sceneLabel = entry.label;
+      } else {
+        endpoint = `/products/get_display_scene/${sceneId}/`;
+        cacheKey = parseInt(sceneId);
+        sceneLabel = "Product Scene";
       }
+
+      let url = this.sceneUrlCache.get(cacheKey) || null;
+      if (!url) {
+        const response = await makeAuthenticatedRequest(endpoint);
+        if (!response.ok) return;
+        const blob = await response.blob();
+        url = URL.createObjectURL(blob);
+        this.sceneUrlCache.set(cacheKey, url);
+      }
+
+      const sceneModel = new SceneModel(sceneId, sceneLabel, cacheKey, url);
+      await this.sceneManager.setSceneModel(sceneModel);
     } catch (error) {
-      console.error('Failed to load scene:', error);
-      this.showNotificationMessage('Failed to load scene', 'error');
+      console.error("Failed to load scene:", error);
+      this.showNotificationMessage("Failed to load scene", "error");
     }
   }
 
   async loadProduct(): Promise<void> {
     if (!this.sceneManager) return;
-
     try {
+      const productId = this.state.currentProductId;
       const response = await makeAuthenticatedRequest(
-        `/products/get_product_detail/${this.productId}/`
+        `/products/get_product_detail/${productId}/`
       );
+      if (!response.ok) return;
 
-      if (response.ok) {
-        const data = await response.json();
-        const modelId = data.product.model_id;
+      const data = await response.json();
+      const product = data.product;
+      const modelId = product.model_id;
 
-        // Load 3D model
+      let url = this.modelUrlCache.get(modelId) || null;
+      if (!url) {
         const modelResponse = await makeAuthenticatedRequest(
           `/products/get_3d_model/${modelId}/`
         );
-
-        if (modelResponse.ok) {
-          const blob = await modelResponse.blob();
-          const url = URL.createObjectURL(blob);
-          this.modelUrlCache.set(modelId, url);
-
-          const productModel = new ProductModel(
-            this.productId,
-            this.productName || data.product.name,
-            modelId,
-            url,
-            {
-              position: [0, 0, 0],
-              rotation: [0, 0, 0],
-              scale: 1.0,
-            }
-          );
-
-          await this.sceneManager.setProduct(productModel);
-          this.updateState({ loading: false });
-        }
+        if (!modelResponse.ok) return;
+        const blob = await modelResponse.blob();
+        url = URL.createObjectURL(blob);
+        this.modelUrlCache.set(modelId, url);
       }
+
+      const productModel = new ProductModel(
+        productId,
+        product.name,
+        modelId,
+        url,
+        { position: [0, 0, 0], rotation: [0, 0, 0], scale: 1.0 }
+      );
+
+      await this.sceneManager.setProduct(productModel);
+
+      const sceneIds: number[] = product.display_scenes_ids || [];
+      const productScenes: SceneEntry[] = sceneIds.map((id, idx) => ({
+        id,
+        label: `Scene ${idx + 1}`,
+        type: "display_scene" as const,
+      }));
+
+      const homeScenes = await this.fetchDigitalHomeScenes();
+      const allScenes: SceneEntry[] = [...productScenes, ...homeScenes];
+
+      this.sceneEntryMap.clear();
+      allScenes.forEach((entry) => {
+        this.sceneEntryMap.set(String(entry.id), entry);
+      });
+
+      this.updateState({
+        loading: false,
+        productScale: 1.0,
+        productRotationY: 0,
+        scenes: allScenes,
+        scenesLoading: false,
+      });
     } catch (error) {
-      console.error('Error loading product:', error);
-      this.showNotificationMessage('Failed to load product', 'error');
-      this.updateState({ loading: false });
+      console.error("Error loading product:", error);
+      this.showNotificationMessage("Failed to load product", "error");
+      this.updateState({ loading: false, scenesLoading: false });
     }
   }
 
-  showNotificationMessage(
-    message: string,
-    type: "success" | "error" | "info" = "info"
-  ): void {
+  async fetchAllProducts(): Promise<void> {
+    try {
+      const response = await makeAuthenticatedRequest("/products/list/", {
+        method: "POST",
+        body: new URLSearchParams({}),
+      });
+      if (!response.ok) {
+        this.updateState({ productsLoading: false });
+        return;
+      }
+      const data = await response.json();
+      this.updateState({
+        allProducts: data.products || [],
+        productsLoading: false,
+      });
+    } catch (error) {
+      console.error("Failed to fetch products:", error);
+      this.updateState({ productsLoading: false });
+    }
+  }
+
+  async fetchDigitalHomeScenes(): Promise<SceneEntry[]> {
+    try {
+      const response = await makeAuthenticatedRequest(
+        "/digitalhomes/get_digital_homes/"
+      );
+      if (!response.ok) return [];
+
+      const data = await response.json();
+      const homes: Array<{
+        id: number;
+        name: string;
+        home_id: number;
+      }> = data.digital_homes || [];
+
+      return homes.map((home) => ({
+        id: `dh-${home.id}`,
+        label: home.name,
+        type: "digital_home" as const,
+        homeId: home.id,
+      }));
+    } catch (error) {
+      console.error("Failed to fetch digital homes for scene catalog:", error);
+      return [];
+    }
+  }
+
+  async switchProduct(product: StoreProduct): Promise<void> {
+    if (String(product.id) === this.state.currentProductId) return;
+
+    this.updateState({ loading: true, scenesLoading: true });
+
+    this.state.currentProductId = String(product.id);
+    this.state.currentSceneId = null;
+
+    if (this.sceneManager?.getSceneModel()) {
+      // setSceneModel with null-like behaviour: we just load product which resets scale/rot
+    }
+
+    // Remove scene from THREE scene
+    if (this.sceneManager) {
+      const oldScene = this.sceneManager.getSceneModel();
+      if (oldScene) {
+        // We can't call setSceneModel(null), so we dispose manually
+        // and let loadProduct handle the rest
+      }
+    }
+
+    await this.loadProduct();
+    this.showNotificationMessage(`Switched to: ${product.name}`, "info");
+  }
+
+  async switchScene(scene: SceneEntry): Promise<void> {
+    if (String(scene.id) === String(this.state.currentSceneId)) return;
+
+    this.sceneEntryMap.set(String(scene.id), scene);
+
+    this.updateState({ loading: true });
+    this.state.currentSceneId = String(scene.id);
+
+    await this.loadScene();
+    this.updateState({ loading: false });
+    this.showNotificationMessage(`Switched to: ${scene.label}`, "info");
+  }
+
+  handleSidebarSelect(itemId: string): void {
+    if (this.state.activePanel === itemId) {
+      this.updateState({ activePanel: null });
+      return;
+    }
+
+    if (itemId === "instructions") {
+      this.updateState({ showInstructions: true, activePanel: "instructions" });
+    } else {
+      this.updateState({ activePanel: itemId as "products" | "scenes" | null });
+    }
+  }
+
+  closePanel(): void {
+    this.updateState({ activePanel: null });
+  }
+
+  showNotificationMessage(message: string, type: "success" | "error" | "info" = "info"): void {
     this.updateState({
       notificationMessage: message,
       notificationType: type,
@@ -219,47 +337,35 @@ class DemoSceneLogic {
     });
   }
 
-  handleToggleInstructions(): void {
-    this.updateState({
-      showInstructions: !this.state.showInstructions,
-    });
-  }
-
   private handleProductMove(delta: THREE.Vector3): void {
-    if (!this.sceneManager) return;
-    this.sceneManager.moveProduct(delta);
+    this.sceneManager?.moveProduct(delta);
   }
 
   private handleProductRotate(deltaY: number): void {
-    if (!this.sceneManager) return;
-    this.sceneManager.rotateProduct(deltaY);
+    this.sceneManager?.rotateProduct(deltaY);
     this.updateState({ productRotationY: this.state.productRotationY + deltaY });
   }
 
   private handleProductScale(delta: number): void {
-    if (!this.sceneManager) return;
     const newScale = Math.max(0.1, Math.min(5.0, this.state.productScale + delta));
-    this.sceneManager.scaleProduct(newScale);
+    this.sceneManager?.scaleProduct(newScale);
     this.updateState({ productScale: newScale });
   }
 
   updateFrame(session: any, camera: THREE.Camera, delta: number): void {
     if (!session) return;
-
     this.navigationController?.update(session, camera, delta);
-
     if (!this.state.navigationMode && this.productController) {
       this.productController.update(session, camera, delta);
     }
   }
 }
 
-// Wrapper for R3F hooks
-export function DemoSceneContent({ 
-  productId, 
-  sceneId, 
+export function DemoSceneContent({
+  productId,
+  sceneId,
   productName,
-  apiBase 
+  apiBase,
 }: DemoSceneContentProps) {
   const { scene, camera } = useThree();
   const xr = useXR();
@@ -273,21 +379,23 @@ export function DemoSceneContent({
     navigationMode: false,
     productScale: 1.0,
     productRotationY: 0,
+    activePanel: null,
+    allProducts: [],
+    productsLoading: true,
+    currentProductId: productId,
+    currentSceneId: sceneId,
+    scenes: [],
+    scenesLoading: true,
   });
 
   const logicRef = useRef<DemoSceneLogic | null>(null);
 
   useEffect(() => {
     const updateState = (update: Partial<DemoState>) => {
-      setState(prev => ({ ...prev, ...update }));
+      setState((prev) => ({ ...prev, ...update }));
     };
 
-    logicRef.current = new DemoSceneLogic(
-      productId,
-      sceneId,
-      productName,
-      updateState
-    );
+    logicRef.current = new DemoSceneLogic(productId, sceneId, productName, updateState);
     logicRef.current.initializeManagers(scene);
 
     return () => {
@@ -300,15 +408,15 @@ export function DemoSceneContent({
     logicRef.current.setupXRRig(scene, camera);
   }, [xr.session, scene, camera]);
 
-  // Load scene and product
   useEffect(() => {
     if (!logicRef.current) return;
-    
-    const loadAll = async () => {
-      await logicRef.current!.loadScene();
-      await logicRef.current!.loadProduct();
-    };
+    const logic = logicRef.current;
 
+    const loadAll = async () => {
+      await logic.loadScene();
+      await logic.loadProduct();
+      await logic.fetchAllProducts();
+    };
     loadAll();
   }, []);
 
@@ -319,7 +427,6 @@ export function DemoSceneContent({
   });
 
   if (!logicRef.current) return null;
-
   const logic = logicRef.current;
 
   if (state.loading) {
@@ -338,6 +445,10 @@ export function DemoSceneContent({
     );
   }
 
+  const showProductsPanel = state.activePanel === "products";
+  const showScenesPanel = state.activePanel === "scenes";
+  const showInstructionsPanel = state.activePanel === "instructions" && state.showInstructions;
+
   return (
     <>
       <color args={["#808080"]} attach="background" />
@@ -352,7 +463,6 @@ export function DemoSceneContent({
             {logic.sceneManager.getSceneModel() && (
               <primitive object={logic.sceneManager.getSceneModel()!.getGroup()} />
             )}
-            
             {logic.sceneManager.getProduct() && (
               <primitive object={logic.sceneManager.getProduct()!.getGroup()} />
             )}
@@ -360,13 +470,49 @@ export function DemoSceneContent({
         )}
       </group>
 
-      <HeadLockedUI distance={1.6} verticalOffset={0} enabled={state.showInstructions}>
-        <VRInstructionPanel 
-          show={state.showInstructions} 
-          onClose={() => logic.updateState({ showInstructions: false })} 
+      <HeadLockedUI distance={1.6} horizontalOffset={0} verticalOffset={0} enabled={true}>
+        <VRSidebar
+          show={true}
+          activePanel={state.activePanel}
+          onItemSelect={(itemId) => logic.handleSidebarSelect(itemId)}
         />
       </HeadLockedUI>
 
+      <HeadLockedUI distance={1.5} horizontalOffset={0.05} verticalOffset={0} enabled={showProductsPanel}>
+        <VRProductCatalogPanel
+          show={showProductsPanel}
+          products={state.allProducts}
+          loading={state.productsLoading}
+          currentProductId={state.currentProductId}
+          onSelectProduct={(product) => {
+            logic.switchProduct(product);
+            logic.closePanel();
+          }}
+          onClose={() => logic.closePanel()}
+        />
+      </HeadLockedUI>
+
+      <HeadLockedUI distance={1.5} horizontalOffset={0.05} verticalOffset={0} enabled={showScenesPanel}>
+        <VRSceneCatalogPanel
+          show={showScenesPanel}
+          scenes={state.scenes}
+          loading={state.scenesLoading}
+          currentSceneId={state.currentSceneId}
+          onSelectScene={(scene) => {
+            logic.switchScene(scene);
+            logic.closePanel();
+          }}
+          onClose={() => logic.closePanel()}
+        />
+      </HeadLockedUI>
+
+      <HeadLockedUI distance={1.6} verticalOffset={0} enabled={showInstructionsPanel}>
+        <VRInstructionPanel
+          show={showInstructionsPanel}
+          onClose={() => logic.updateState({ showInstructions: false, activePanel: null })}
+        />
+      </HeadLockedUI>
+      
       <HeadLockedUI distance={1.4} verticalOffset={0} enabled={state.showNotification}>
         <VRNotificationPanel
           show={state.showNotification}
