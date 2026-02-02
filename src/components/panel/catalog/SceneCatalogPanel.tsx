@@ -1,6 +1,6 @@
 import * as React from "react";
 import { Text } from "@react-three/drei";
-import { RoundedPlane, GradientBackground, CardBackground } from "./common/PanelElements";
+import { RoundedPlane, GradientBackground, CardBackground } from "../common/PanelElements";
 
 export interface SceneEntry {
   id: number | string;

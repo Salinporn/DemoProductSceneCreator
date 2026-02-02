@@ -1,9 +1,9 @@
 import * as React from "react";
 import { Text } from "@react-three/drei";
-import { FurnitureImage } from "./furniture/FurnitureImage";
-import { RoundedPlane, GradientBackground, CardBackground } from "./common/PanelElements";
+import { FurnitureImage } from "../furniture/FurnitureImage";
+import { RoundedPlane, GradientBackground, CardBackground } from "../common/PanelElements";
 
-export interface StoreProduct {
+export interface CartProduct {
   id: string | number;
   name: string;
   description?: string;
@@ -15,25 +15,27 @@ export interface StoreProduct {
   rating?: number;
   display_scenes_ids?: number[];
   model_id?: number;
+  quantity?: number;
+  cart_item_id?: number;
 }
 
-interface VRProductCatalogPanelProps {
+interface VRCartCatalogPanelProps {
   show: boolean;
-  products: StoreProduct[];
+  products: CartProduct[];
   loading: boolean;
   currentProductId: string | number | null;
-  onSelectProduct: (product: StoreProduct) => void;
+  onSelectProduct: (product: CartProduct) => void;
   onClose: () => void;
 }
 
-export function VRProductCatalogPanel({
+export function VRCartCatalogPanel({
   show,
   products,
   loading,
   currentProductId,
   onSelectProduct,
   onClose,
-}: VRProductCatalogPanelProps) {
+}: VRCartCatalogPanelProps) {
   const [hoveredItem, setHoveredItem] = React.useState<string | null>(null);
   const [hoveredButton, setHoveredButton] = React.useState<string | null>(null);
 
@@ -61,7 +63,7 @@ export function VRProductCatalogPanel({
           width={panelWidth}
           height={panelHeight}
           radius={0.1}
-          color1="#EAF4FA"
+          color1="#F0F7FF"
           color2="#F5F7FA"
           opacity={0.7}
         />
@@ -87,7 +89,7 @@ export function VRProductCatalogPanel({
         anchorY="middle"
         fontWeight="semi-bold"
       >
-        🛍️ Store Products
+        🛒 My Cart Items
       </Text>
 
       {/* Close Button */}
@@ -135,7 +137,7 @@ export function VRProductCatalogPanel({
             anchorX="center"
             anchorY="middle"
           >
-            Loading products...
+            Loading cart items...
           </Text>
         </group>
       ) : products.length === 0 ? (
@@ -146,7 +148,7 @@ export function VRProductCatalogPanel({
           anchorX="center"
           anchorY="middle"
         >
-          No products available
+          Your cart is empty
         </Text>
       ) : (
         <group>
@@ -183,7 +185,7 @@ export function VRProductCatalogPanel({
                   : null;
 
             return (
-              <group key={`product-${itemKey}-${itemIndex}`} position={[x, y, 0.02]}>
+              <group key={`cart-product-${itemKey}-${itemIndex}`} position={[x, y, 0.02]}>
                 {/* Card background */}
                 <mesh
                   position={[0, 0, 0]}
@@ -206,16 +208,16 @@ export function VRProductCatalogPanel({
                     radius={0.04}
                     colorTop={
                       isActive
-                        ? "#3FA4CE"
+                        ? "#6366F1"
                         : isHovered
-                          ? "#C7E4FA"
-                          : "#DCEEFB"
+                          ? "#C7D2FE"
+                          : "#E0E7FF"
                     }
                     colorBottom={
                       isActive
-                        ? "#66B9E2"
+                        ? "#818CF8"
                         : isHovered
-                          ? "#E6F0F7"
+                          ? "#E0E7FF"
                           : "#F0F2F5"
                     }
                     opacity={isActive ? 0.65 : 0.5}
@@ -239,7 +241,7 @@ export function VRProductCatalogPanel({
                   <mesh position={[0, 0, 0.005]}>
                     <RoundedPlane width={cardWidth + 0.008} height={cardHeight + 0.008} radius={0.043} />
                     <meshBasicMaterial
-                      color="#3FA4CE"
+                      color="#6366F1"
                       transparent
                       opacity={0.6}
                     />
@@ -272,12 +274,32 @@ export function VRProductCatalogPanel({
                   )}
                 </group>
 
+                {/* Quantity badge */}
+                {product.quantity && product.quantity > 1 && (
+                  <group position={[0.08, 0.15, 0.02]}>
+                    <mesh>
+                      <circleGeometry args={[0.025, 16]} />
+                      <meshStandardMaterial color="#EF4444" />
+                    </mesh>
+                    <Text
+                      position={[0, 0, 0.003]}
+                      fontSize={0.02}
+                      color="#ffffff"
+                      anchorX="center"
+                      anchorY="middle"
+                      fontWeight="700"
+                    >
+                      {product.quantity}
+                    </Text>
+                  </group>
+                )}
+
                 {/* Category badge */}
                 {product.category && (
                   <group position={[-0.05, -0.05, 0.02]}>
                     <mesh>
                       <planeGeometry args={[0.14, 0.045]} />
-                      <meshStandardMaterial color="#66B9E2" roughness={0.5} />
+                      <meshStandardMaterial color="#818CF8" roughness={0.5} />
                     </mesh>
                     <Text
                       position={[0, 0, 0.003]}
@@ -315,7 +337,7 @@ export function VRProductCatalogPanel({
                   <Text
                     position={[0, -0.17, 0.02]}
                     fontSize={0.025}
-                    color={isActive ? "#1E40AF" : "#0369A1"}
+                    color={isActive ? "#4338CA" : "#6366F1"}
                     anchorX="center"
                     anchorY="middle"
                     fontWeight="600"
