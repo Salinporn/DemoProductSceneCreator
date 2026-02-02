@@ -27,8 +27,15 @@ const demoSidebarItems: SidebarItemData[] = [
     description: "Switch preview scene",
   },
   {
+    id: "cart",
+    icon: "🛒",
+    label: "Cart",
+    color: "#6366F1",
+    description: "View items in your cart",
+  },
+  {
     id: "instructions",
-    icon: "📖",
+    icon: "ⓘ",
     label: "Help",
     color: "#8B5CF6",
     description: "Controls & instructions",
@@ -111,7 +118,7 @@ function SidebarItem({ item, yPos, isActive, onHover, onClick, isHovered }: Side
 
 interface VRDemoSidebarProps {
   show: boolean;
-  activePanel: string | null; // "products" | "scenes" | "instructions" | null
+  activePanel: string | null; // "products" | "scenes" | "instructions" | "cart" | null
   onItemSelect: (itemId: string) => void;
 }
 

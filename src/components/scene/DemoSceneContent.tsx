@@ -212,6 +212,18 @@ class DemoSceneLogic {
       allScenes.forEach((entry) => {
         this.sceneEntryMap.set(String(entry.id), entry);
       });
+      
+      if (!this.state.currentSceneId && homeScenes.length > 0) {
+        const defaultScene = homeScenes[0];
+        this.state.currentSceneId = String(defaultScene.id);
+        
+        await this.loadScene();
+        
+        this.showNotificationMessage(
+          `Using your digital home: ${defaultScene.label}`,
+          "info"
+        );
+      }
 
       this.updateState({
         loading: false,
@@ -219,6 +231,7 @@ class DemoSceneLogic {
         productRotationY: 0,
         scenes: allScenes,
         scenesLoading: false,
+        currentSceneId: this.state.currentSceneId, 
       });
     } catch (error) {
       console.error("Error loading product:", error);
