@@ -1,5 +1,5 @@
 import { Text } from "@react-three/drei";
-import { GradientBackground, RoundedPlane } from "./common/PanelElements";
+import { GradientBackground, RoundedPlane } from "../common/PanelElements";
 import { useState } from "react";
 import { useCursor } from "@react-three/drei";
 

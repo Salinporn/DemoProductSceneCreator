@@ -6,7 +6,7 @@ import * as THREE from "three";
 import { HeadLockedUI } from "../panel/common/HeadLockedUI";
 import { VRInstructionPanel } from "../panel/VRInstructionPanel";
 import { VRNotificationPanel } from "../panel/common/NotificationPanel";
-import { VRSidebar } from "../panel/VRSidebar";
+import { VRSidebar } from "../panel/sidebar/VRSidebar";
 import { VRProductCatalogPanel, StoreProduct } from "../panel/VRProductCatalogPanel";
 import { VRSceneCatalogPanel, SceneEntry } from "../panel/VRSceneCatalogPanel";
 import { VRCartCatalogPanel, CartProduct } from "../panel/VRCartCatalogPanel";
