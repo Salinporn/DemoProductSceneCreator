@@ -15,6 +15,8 @@ export interface CartProduct {
   rating?: number;
   display_scenes_ids?: number[];
   model_id?: number;
+  quantity?: number;
+  cart_item_id?: number;
 }
 
 interface VRCartCatalogPanelProps {
@@ -146,7 +148,7 @@ export function VRCartCatalogPanel({
           anchorX="center"
           anchorY="middle"
         >
-          No items in cart
+          Your cart is empty
         </Text>
       ) : (
         <group>
@@ -271,6 +273,26 @@ export function VRCartCatalogPanel({
                     </>
                   )}
                 </group>
+
+                {/* Quantity badge */}
+                {product.quantity && product.quantity > 1 && (
+                  <group position={[0.08, 0.15, 0.02]}>
+                    <mesh>
+                      <circleGeometry args={[0.025, 16]} />
+                      <meshStandardMaterial color="#EF4444" />
+                    </mesh>
+                    <Text
+                      position={[0, 0, 0.003]}
+                      fontSize={0.02}
+                      color="#ffffff"
+                      anchorX="center"
+                      anchorY="middle"
+                      fontWeight="700"
+                    >
+                      {product.quantity}
+                    </Text>
+                  </group>
+                )}
 
                 {/* Category badge */}
                 {product.category && (

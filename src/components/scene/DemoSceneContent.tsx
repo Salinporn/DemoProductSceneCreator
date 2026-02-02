@@ -9,6 +9,7 @@ import { VRNotificationPanel } from "../panel/common/NotificationPanel";
 import { VRSidebar } from "../panel/VRSidebar";
 import { VRProductCatalogPanel, StoreProduct } from "../panel/VRProductCatalogPanel";
 import { VRSceneCatalogPanel, SceneEntry } from "../panel/VRSceneCatalogPanel";
+import { VRCartCatalogPanel, CartProduct } from "../panel/VRCartCatalogPanel";
 import { NavigationController, ProductEditController } from "../../core/controllers/XRProductController";
 import { makeAuthenticatedRequest } from "../../utils/Api";
 import { ProductModel } from "../../core/objects/ProductModel";
@@ -32,13 +33,15 @@ interface DemoState {
   productScale: number;
   productRotationY: number;
 
-  activePanel: "products" | "scenes" | "instructions" | null;
+  activePanel: "products" | "scenes" | "instructions" | "cart" | null;
   allProducts: StoreProduct[];
   productsLoading: boolean;
   currentProductId: string;
   currentSceneId: string | null;
   scenes: SceneEntry[];
   scenesLoading: boolean;
+  cartProducts: CartProduct[];
+  cartLoading: boolean;
 }
 
 class DemoSceneLogic {
@@ -77,6 +80,8 @@ class DemoSceneLogic {
       currentSceneId: sceneId,
       scenes: [],
       scenesLoading: true,
+      cartProducts: [],
+      cartLoading: false,
     };
   }
 
@@ -261,6 +266,65 @@ class DemoSceneLogic {
     }
   }
 
+  async fetchCartItems(): Promise<void> {
+    this.updateState({ cartLoading: true });
+    try {
+      // Fetch cart items
+      const cartResponse = await makeAuthenticatedRequest("/carts/view/");
+      if (!cartResponse.ok) {
+        this.updateState({ cartLoading: false, cartProducts: [] });
+        return;
+      }
+
+      const cartData = await cartResponse.json();
+      const cartItems = cartData.items || [];
+
+      // Fetch full product details for each cart item
+      const productPromises = cartItems.map(async (item: any) => {
+        try {
+          const productResponse = await makeAuthenticatedRequest(
+            `/products/get_product_detail/${item.product_id}/`
+          );
+          if (!productResponse.ok) return null;
+
+          const productData = await productResponse.json();
+          const product = productData.product;
+
+          return {
+            id: product.id,
+            name: product.name,
+            description: product.description,
+            category: product.category,
+            product_type: product.type,
+            digital_price: product.digital_price,
+            physical_price: product.physical_price,
+            image: product.image,
+            rating: product.rating,
+            display_scenes_ids: product.display_scenes_ids,
+            model_id: product.model_id,
+            quantity: item.quantity,
+            cart_item_id: item.id,
+          } as CartProduct;
+        } catch (error) {
+          console.error(`Failed to fetch product ${item.product_id}:`, error);
+          return null;
+        }
+      });
+
+      const products = await Promise.all(productPromises);
+      const validProducts = products.filter((p): p is CartProduct => p !== null);
+
+      this.updateState({
+        cartProducts: validProducts,
+        cartLoading: false,
+      });
+    } catch (error) {
+      console.error("Failed to fetch cart items:", error);
+      this.updateState({ cartLoading: false, cartProducts: [] });
+      this.showNotificationMessage("Failed to load cart items", "error");
+    }
+  }
+
   async fetchDigitalHomeScenes(): Promise<SceneEntry[]> {
     try {
       const response = await makeAuthenticatedRequest(
@@ -287,26 +351,13 @@ class DemoSceneLogic {
     }
   }
 
-  async switchProduct(product: StoreProduct): Promise<void> {
+  async switchProduct(product: StoreProduct | CartProduct): Promise<void> {
     if (String(product.id) === this.state.currentProductId) return;
 
     this.updateState({ loading: true, scenesLoading: true });
 
     this.state.currentProductId = String(product.id);
     this.state.currentSceneId = null;
-
-    if (this.sceneManager?.getSceneModel()) {
-      // setSceneModel with null-like behaviour: we just load product which resets scale/rot
-    }
-
-    // Remove scene from THREE scene
-    if (this.sceneManager) {
-      const oldScene = this.sceneManager.getSceneModel();
-      if (oldScene) {
-        // We can't call setSceneModel(null), so we dispose manually
-        // and let loadProduct handle the rest
-      }
-    }
 
     await this.loadProduct();
     this.showNotificationMessage(`Switched to: ${product.name}`, "info");
@@ -333,6 +384,10 @@ class DemoSceneLogic {
 
     if (itemId === "instructions") {
       this.updateState({ showInstructions: true, activePanel: "instructions" });
+    } else if (itemId === "cart") {
+      // Fetch cart items when cart panel is opened
+      this.fetchCartItems();
+      this.updateState({ activePanel: "cart" });
     } else {
       this.updateState({ activePanel: itemId as "products" | "scenes" | null });
     }
@@ -399,6 +454,8 @@ export function DemoSceneContent({
     currentSceneId: sceneId,
     scenes: [],
     scenesLoading: true,
+    cartProducts: [],
+    cartLoading: false,
   });
 
   const logicRef = useRef<DemoSceneLogic | null>(null);
@@ -460,6 +517,7 @@ export function DemoSceneContent({
 
   const showProductsPanel = state.activePanel === "products";
   const showScenesPanel = state.activePanel === "scenes";
+  const showCartPanel = state.activePanel === "cart";
   const showInstructionsPanel = state.activePanel === "instructions" && state.showInstructions;
 
   return (
@@ -513,6 +571,20 @@ export function DemoSceneContent({
           currentSceneId={state.currentSceneId}
           onSelectScene={(scene) => {
             logic.switchScene(scene);
+            logic.closePanel();
+          }}
+          onClose={() => logic.closePanel()}
+        />
+      </HeadLockedUI>
+
+      <HeadLockedUI distance={1.5} horizontalOffset={0.05} verticalOffset={0} enabled={showCartPanel}>
+        <VRCartCatalogPanel
+          show={showCartPanel}
+          products={state.cartProducts}
+          loading={state.cartLoading}
+          currentProductId={state.currentProductId}
+          onSelectProduct={(product) => {
+            logic.switchProduct(product);
             logic.closePanel();
           }}
           onClose={() => logic.closePanel()}
