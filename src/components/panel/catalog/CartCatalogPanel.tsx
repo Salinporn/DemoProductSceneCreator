@@ -1,0 +1,416 @@
+import * as React from "react";
+import { Text } from "@react-three/drei";
+import { FurnitureImage } from "../furniture/FurnitureImage";
+import { RoundedPlane, GradientBackground, CardBackground } from "../common/PanelElements";
+
+export interface CartProduct {
+  id: string | number;
+  name: string;
+  description?: string;
+  category?: string;
+  product_type?: string;
+  digital_price?: string | null;
+  physical_price?: string | null;
+  image?: string | null;
+  rating?: number;
+  display_scenes_ids?: number[];
+  model_id?: number;
+  quantity: number;
+  cart_item_id: number;
+}
+
+interface VRCartCatalogPanelProps {
+  show: boolean;
+  products: CartProduct[];
+  loading: boolean;
+  currentProductId: string | number | null;
+  currentSceneId: string | number | null;
+  currentSceneType: "display_scene" | "digital_home" | null;
+  onSelectProduct: (product: CartProduct) => void;
+  onClose: () => void;
+}
+
+export function VRCartCatalogPanel({
+  show,
+  products,
+  loading,
+  currentProductId,
+  currentSceneId,
+  currentSceneType,
+  onSelectProduct,
+  onClose,
+}: VRCartCatalogPanelProps) {
+  const [hoveredItem, setHoveredItem] = React.useState<string | null>(null);
+  const [hoveredButton, setHoveredButton] = React.useState<string | null>(null);
+
+  if (!show) return null;
+
+  const canViewInCurrentScene = (product: CartProduct): boolean => {
+    if (currentSceneType === "digital_home") return true;
+    
+    if (currentSceneType === "display_scene" && currentSceneId) {
+      const sceneId = Number(currentSceneId);
+      return (product.display_scenes_ids || []).includes(sceneId);
+    }
+    
+    return true;
+  };
+
+  const itemsPerRow = 3;
+  const rows = Math.ceil(products.length / itemsPerRow);
+
+  const headerHeight = 0.25;
+  const itemHeight = 0.52;
+  const topPadding = 0.005;
+  const bottomPadding = 0.03;
+
+  const panelHeight = Math.max(
+    1.2,
+    headerHeight + topPadding + rows * itemHeight + bottomPadding
+  );
+  const panelWidth = 1.05;
+
+  const inDisplayScene = currentSceneType === "display_scene";
+
+  return (
+    <group>
+      {/* Main background */}
+      <mesh position={[0, 0, -0.02]}>
+        <GradientBackground
+          width={panelWidth}
+          height={panelHeight}
+          radius={0.1}
+          color1="#EAF4FA"
+          color2="#F5F7FA"
+          opacity={0.7}
+        />
+      </mesh>
+
+      {/* Shadow */}
+      <mesh position={[0, -0.01, -0.03]}>
+        <RoundedPlane width={panelWidth} height={panelHeight} radius={0.1} />
+        <meshStandardMaterial
+          color="#000000"
+          opacity={0.15}
+          transparent
+          roughness={1.0}
+        />
+      </mesh>
+
+      {/* Header */}
+      <Text
+        position={[0, panelHeight / 2 - 0.12, 0.01]}
+        fontSize={0.05}
+        color="#334155"
+        anchorX="center"
+        anchorY="middle"
+        fontWeight="semi-bold"
+      >
+        🛒 Cart Items
+      </Text>
+
+      {inDisplayScene && (
+        <Text
+          position={[0, panelHeight / 2 - 0.2, 0.01]}
+          fontSize={0.022}
+          color="#DC2626"
+          anchorX="center"
+          anchorY="middle"
+          maxWidth={0.9}
+          textAlign="center"
+        >
+          ⚠️ Only products with this room can be viewed here
+        </Text>
+      )}
+
+      {/* Close Button */}
+      <group
+        position={[panelWidth / 2 - 0.08, panelHeight / 2 - 0.12, 0.01]}
+        onPointerEnter={(e) => {
+          e.stopPropagation();
+          setHoveredButton("close");
+        }}
+        onPointerLeave={(e) => {
+          e.stopPropagation();
+          setHoveredButton(null);
+        }}
+        onPointerDown={(e) => {
+          e.stopPropagation();
+          onClose();
+        }}
+      >
+        <mesh>
+          <RoundedPlane width={0.08} height={0.08} radius={0.03} />
+          <meshStandardMaterial
+            color={hoveredButton === "close" ? "#475569" : "#334155"}
+            emissive={hoveredButton === "close" ? "#ccc" : "#ccc"}
+            emissiveIntensity={hoveredButton === "close" ? 0.6 : 0.4}
+          />
+        </mesh>
+        <Text
+          position={[-0.005, -0.01, 0.01]}
+          fontSize={0.05}
+          color="#fff"
+          anchorX="center"
+          anchorY="middle"
+        >
+          ✕
+        </Text>
+      </group>
+
+      {/* Content */}
+      {loading ? (
+        <group position={[0, 0, 0.01]}>
+          <Text
+            position={[0, 0, 0]}
+            fontSize={0.03}
+            color="#334155"
+            anchorX="center"
+            anchorY="middle"
+          >
+            Loading cart...
+          </Text>
+        </group>
+      ) : products.length === 0 ? (
+        <Text
+          position={[0, 0, 0.01]}
+          fontSize={0.03}
+          color="#334155"
+          anchorX="center"
+          anchorY="middle"
+        >
+          Your cart is empty
+        </Text>
+      ) : (
+        <group>
+          {products.map((product, itemIndex) => {
+            const col = itemIndex % itemsPerRow;
+            const row = Math.floor(itemIndex / itemsPerRow);
+
+            const cardWidth = 0.27;
+            const cardHeight = 0.42;
+            const cardSpacing = 0.05;
+            const totalWidth =
+              itemsPerRow * cardWidth + (itemsPerRow - 1) * cardSpacing;
+            const x =
+              -totalWidth / 2 +
+              col * (cardWidth + cardSpacing) +
+              cardWidth / 2;
+            const y =
+              panelHeight / 2 -
+              headerHeight -
+              topPadding -
+              row * itemHeight -
+              cardHeight / 2;
+
+            const itemKey = String(product.id);
+            const isHovered = hoveredItem === itemKey;
+            const isActive = String(currentProductId) === itemKey;
+            const isCompatible = canViewInCurrentScene(product);
+
+            const price =
+              product.digital_price && product.digital_price !== "None"
+                ? `$${parseFloat(product.digital_price).toFixed(2)}`
+                : product.physical_price &&
+                    product.physical_price !== "None"
+                  ? `$${parseFloat(product.physical_price).toFixed(2)}`
+                  : null;
+
+            return (
+              <group key={`cart-${itemKey}-${itemIndex}`} position={[x, y, 0.02]}>
+                {/* Card background */}
+                <mesh
+                  position={[0, 0, 0]}
+                  onPointerEnter={(e) => {
+                    e.stopPropagation();
+                    if (isCompatible) setHoveredItem(itemKey);
+                  }}
+                  onPointerLeave={(e) => {
+                    e.stopPropagation();
+                    setHoveredItem(null);
+                  }}
+                  onPointerDown={(e) => {
+                    e.stopPropagation();
+                    if (isCompatible) {
+                      onSelectProduct(product);
+                    }
+                  }}
+                >
+                  <CardBackground
+                    width={cardWidth}
+                    height={cardHeight}
+                    radius={0.04}
+                    colorTop={
+                      !isCompatible
+                        ? "#94A3B8"
+                        : isActive
+                          ? "#3FA4CE"
+                          : isHovered
+                            ? "#C7E4FA"
+                            : "#DCEEFB"
+                    }
+                    colorBottom={
+                      !isCompatible
+                        ? "#CBD5E1"
+                        : isActive
+                          ? "#66B9E2"
+                          : isHovered
+                            ? "#E6F0F7"
+                            : "#F0F2F5"
+                    }
+                    opacity={!isCompatible ? 0.3 : isActive ? 0.65 : 0.5}
+                    topStrength={isActive ? 2.8 : isHovered ? 2.8 : 2.5}
+                  />
+                </mesh>
+
+                {/* Card shadow */}
+                <mesh position={[0, -0.01, -0.01]}>
+                  <RoundedPlane width={cardWidth} height={cardHeight} radius={0.04} />
+                  <meshStandardMaterial
+                    color="#000000"
+                    opacity={0.1}
+                    transparent
+                    roughness={1.0}
+                  />
+                </mesh>
+
+                {/* Active border highlight */}
+                {isActive && (
+                  <mesh position={[0, 0, 0.005]}>
+                    <RoundedPlane width={cardWidth + 0.008} height={cardHeight + 0.008} radius={0.043} />
+                    <meshBasicMaterial
+                      color="#3FA4CE"
+                      transparent
+                      opacity={0.6}
+                    />
+                  </mesh>
+                )}
+
+                {/* Incompatible overlay */}
+                {!isCompatible && (
+                  <mesh position={[0, 0, 0.015]}>
+                    <RoundedPlane width={cardWidth} height={cardHeight} radius={0.04} />
+                    <meshBasicMaterial
+                      color="#1E293B"
+                      transparent
+                      opacity={0.5}
+                    />
+                  </mesh>
+                )}
+
+                {/* Product Image */}
+                <group position={[0, 0.1, 0.01]}>
+                  {product.image ? (
+                    <mesh>
+                      <planeGeometry args={[0.2, 0.2]} />
+                      <FurnitureImage image={product.image} />
+                    </mesh>
+                  ) : (
+                    <>
+                      <mesh>
+                        <planeGeometry args={[0.2, 0.2]} />
+                        <meshStandardMaterial color="#d0d6dd" />
+                      </mesh>
+                      <Text
+                        position={[0, 0, 0.005]}
+                        fontSize={0.025}
+                        color="#94A3B8"
+                        anchorX="center"
+                        anchorY="middle"
+                      >
+                        No Image
+                      </Text>
+                    </>
+                  )}
+                </group>
+
+                {/* Lock icon for incompatible products */}
+                {!isCompatible && (
+                  <Text
+                    position={[0, 0.1, 0.02]}
+                    fontSize={0.08}
+                    color="#66B9E2"
+                    anchorX="center"
+                    anchorY="middle"
+                  >
+                    🛡
+                  </Text>
+                )}
+
+                {/* Quantity badge */}
+                <group position={[0.08, 0.18, 0.02]}>
+                  <mesh>
+                    <circleGeometry args={[0.035, 16]} />
+                    <meshStandardMaterial color="#EF4444" roughness={0.5} />
+                  </mesh>
+                  <Text
+                    position={[0, 0, 0.003]}
+                    fontSize={0.025}
+                    color="#ffffff"
+                    anchorX="center"
+                    anchorY="middle"
+                    fontWeight="700"
+                  >
+                    {product.quantity}
+                  </Text>
+                </group>
+
+                {/* Category badge */}
+                {product.category && isCompatible && (
+                  <group position={[-0.05, -0.05, 0.02]}>
+                    <mesh>
+                      <planeGeometry args={[0.14, 0.045]} />
+                      <meshStandardMaterial color="#66B9E2" roughness={0.5} />
+                    </mesh>
+                    <Text
+                      position={[0, 0, 0.003]}
+                      fontSize={0.018}
+                      color="#ffffff"
+                      anchorX="center"
+                      anchorY="middle"
+                      fontWeight="600"
+                    >
+                      {product.category.length > 10
+                        ? product.category.slice(0, 9) + "…"
+                        : product.category}
+                    </Text>
+                  </group>
+                )}
+
+                {/* Product name */}
+                <Text
+                  position={[0, -0.12, 0.02]}
+                  fontSize={0.028}
+                  color={!isCompatible ? "#64748B" : "#334155"}
+                  anchorX="center"
+                  anchorY="middle"
+                  maxWidth={cardWidth - 0.06}
+                  textAlign="center"
+                  fontWeight="500"
+                >
+                  {product.name.length > 16
+                    ? product.name.slice(0, 15) + "…"
+                    : product.name}
+                </Text>
+
+                {/* Price */}
+                {price && (
+                  <Text
+                    position={[0, -0.17, 0.02]}
+                    fontSize={0.025}
+                    color={!isCompatible ? "#64748B" : isActive ? "#1E40AF" : "#0369A1"}
+                    anchorX="center"
+                    anchorY="middle"
+                    fontWeight="600"
+                  >
+                    {price}
+                  </Text>
+                )}
+              </group>
+            );
+          })}
+        </group>
+      )}
+    </group>
+  );
+}
