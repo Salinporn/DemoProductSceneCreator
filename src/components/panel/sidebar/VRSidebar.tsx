@@ -78,7 +78,7 @@ function SidebarItem({ item, yPos, isActive, onHover, onClick, isHovered }: Side
         <Text
           position={[0.01, 0, 0.01]}
           fontSize={0.055}
-          color={isActive || isHovered ? "#000000" : "#94A3B8"}
+          color={isActive || isHovered ? "#FFFFFF" : "#94A3B8"}
           anchorX="center"
           anchorY="middle"
         >
@@ -115,10 +115,9 @@ function SidebarItem({ item, yPos, isActive, onHover, onClick, isHovered }: Side
     </group>
   );
 }
-
 interface VRDemoSidebarProps {
   show: boolean;
-  activePanel: string | null; // "products" | "scenes" | "instructions" | "cart" | null
+  activePanel: string | null;
   onItemSelect: (itemId: string) => void;
 }
 
@@ -131,8 +130,10 @@ export function VRSidebar({ show, activePanel, onItemSelect }: VRDemoSidebarProp
     onItemSelect(itemId);
   };
 
-  const sidebarHeight = 0.2 + demoSidebarItems.length * 0.22;
-  const startY = (demoSidebarItems.length - 1) * 0.11;
+  // Calculate positions
+  const totalItems = demoSidebarItems.length + 1;
+  const sidebarHeight = 0.2 + totalItems * 0.22;
+  const startY = (totalItems - 1) * 0.11;
 
   return (
     <group position={[-0.8, 0, 0]}>
@@ -163,7 +164,6 @@ export function VRSidebar({ show, activePanel, onItemSelect }: VRDemoSidebarProp
 
       {/* Dividers between items */}
       {demoSidebarItems.map((_, index) => {
-        if (index === demoSidebarItems.length - 1) return null;
         const yPos = startY - index * 0.22 - 0.11;
         return (
           <mesh key={`div-${index}`} position={[SIDEBAR_CENTER_X, yPos, 0]}>

@@ -11,7 +11,7 @@ import { VRProductCatalogPanel, StoreProduct } from "../panel/catalog/ProductCat
 import { VRSceneCatalogPanel, SceneEntry } from "../panel/catalog/SceneCatalogPanel";
 import { VRCartCatalogPanel, CartProduct } from "../panel/catalog/CartCatalogPanel";
 import { NavigationController, ProductEditController } from "../../core/controllers/XRProductController";
-import { makeAuthenticatedRequest } from "../../utils/Api";
+import { makeAuthenticatedRequest } from "../../utils/API";
 import { ProductModel } from "../../core/objects/ProductModel";
 import { SceneModel } from "../../core/objects/SceneModel";
 import { DemoSceneManager } from "../../core/managers/DemoSceneManager";
@@ -89,6 +89,10 @@ class DemoSceneLogic {
     return this.state;
   }
 
+  getSceneEntry(sceneId: string): SceneEntry | undefined {
+    return this.sceneEntryMap.get(sceneId);
+  }
+
   updateState(update: Partial<DemoState>): void {
     this.state = { ...this.state, ...update };
     this.setState(update);
@@ -133,7 +137,20 @@ class DemoSceneLogic {
   }
 
   async loadScene(): Promise<void> {
-    if (!this.sceneManager || !this.state.currentSceneId) return;
+    if (!this.sceneManager) return;
+    
+    // If currentSceneId is null, don't load any scene
+    if (!this.state.currentSceneId) {
+      // Clear any existing scene
+      if (this.sceneManager.getSceneModel()) {
+        const oldScene = this.sceneManager.getSceneModel();
+        if (oldScene) {
+          this.sceneManager.getSceneModel()?.dispose();
+        }
+      }
+      return;
+    }
+    
     try {
       const sceneId = this.state.currentSceneId;
       const entry = this.sceneEntryMap.get(String(sceneId));
@@ -149,7 +166,7 @@ class DemoSceneLogic {
       } else {
         endpoint = `/products/get_display_scene/${sceneId}/`;
         cacheKey = parseInt(sceneId);
-        sceneLabel = "Product Scene";
+        sceneLabel = "Default Room";
       }
 
       let url = this.sceneUrlCache.get(cacheKey) || null;
@@ -206,7 +223,7 @@ class DemoSceneLogic {
       const sceneIds: number[] = product.display_scenes_ids || [];
       const productScenes: SceneEntry[] = sceneIds.map((id, idx) => ({
         id,
-        label: `Scene ${idx + 1}`,
+        label: `Room ${idx + 1}`,
         type: "display_scene" as const,
       }));
 
@@ -218,16 +235,51 @@ class DemoSceneLogic {
         this.sceneEntryMap.set(String(entry.id), entry);
       });
       
-      if (!this.state.currentSceneId && homeScenes.length > 0) {
-        const defaultScene = homeScenes[0];
-        this.state.currentSceneId = String(defaultScene.id);
-        
+      let initialSceneId = this.state.currentSceneId;
+      let shouldLoadScene = false;
+      
+      if (!initialSceneId) {
+        if (homeScenes.length > 0) {
+          const defaultScene = homeScenes[0];
+          initialSceneId = String(defaultScene.id);
+          shouldLoadScene = true;
+          
+          this.showNotificationMessage(
+            `Using your digital home: ${defaultScene.label}`,
+            "info"
+          );
+        } else {
+          this.showNotificationMessage(
+            "No digital home available. Please create a digital home to view products in VR.",
+            "error"
+          );
+          initialSceneId = null;
+        }
+      } else {
+        const currentSceneStillExists = allScenes.some(s => String(s.id) === String(initialSceneId));
+        if (!currentSceneStillExists) {
+          if (homeScenes.length > 0) {
+            const defaultScene = homeScenes[0];
+            initialSceneId = String(defaultScene.id);
+            shouldLoadScene = true;
+            
+            this.showNotificationMessage(
+              `Switched to your digital home: ${defaultScene.label}`,
+              "info"
+            );
+          } else {
+            initialSceneId = null;
+            this.showNotificationMessage(
+              "No digital home available. Please create a digital home to view products in VR.",
+              "error"
+            );
+          }
+        }
+      }
+
+      if (shouldLoadScene) {
+        this.state.currentSceneId = initialSceneId;
         await this.loadScene();
-        
-        this.showNotificationMessage(
-          `Using your digital home: ${defaultScene.label}`,
-          "info"
-        );
       }
 
       this.updateState({
@@ -236,7 +288,7 @@ class DemoSceneLogic {
         productRotationY: 0,
         scenes: allScenes,
         scenesLoading: false,
-        currentSceneId: this.state.currentSceneId, 
+        currentSceneId: initialSceneId,
       });
     } catch (error) {
       console.error("Error loading product:", error);
@@ -269,7 +321,6 @@ class DemoSceneLogic {
   async fetchCartItems(): Promise<void> {
     this.updateState({ cartLoading: true });
     try {
-      // Fetch cart items
       const cartResponse = await makeAuthenticatedRequest("/carts/view/");
       if (!cartResponse.ok) {
         this.updateState({ cartLoading: false, cartProducts: [] });
@@ -279,7 +330,6 @@ class DemoSceneLogic {
       const cartData = await cartResponse.json();
       const cartItems = cartData.items || [];
 
-      // Fetch full product details for each cart item
       const productPromises = cartItems.map(async (item: any) => {
         try {
           const productResponse = await makeAuthenticatedRequest(
@@ -354,11 +404,37 @@ class DemoSceneLogic {
   async switchProduct(product: StoreProduct | CartProduct): Promise<void> {
     if (String(product.id) === this.state.currentProductId) return;
 
-    this.updateState({ loading: true, scenesLoading: true });
+    if (!this.state.currentSceneId) {
+      this.showNotificationMessage(
+        "Please select a digital home from the Scenes panel to view products.",
+        "error"
+      );
+      return;
+    }
 
-    this.state.currentProductId = String(product.id);
-    this.state.currentSceneId = null;
+    const currentScene = this.sceneEntryMap.get(String(this.state.currentSceneId));
+    
+    if (currentScene && currentScene.type === "display_scene") {
+      const currentSceneId = Number(this.state.currentSceneId);
+      const productScenes = product.display_scenes_ids || [];
+      
+      if (!productScenes.includes(currentSceneId)) {
+        this.showNotificationMessage(
+          "This product cannot be viewed in the current room. Please switch to your digital home first.",
+          "error"
+        );
+        return;
+      }
+    }
 
+    const newProductId = String(product.id);
+    this.updateState({ 
+      loading: true, 
+      scenesLoading: true,
+      currentProductId: newProductId
+    });
+    this.state.currentProductId = newProductId;
+    
     await this.loadProduct();
     this.showNotificationMessage(`Switched to: ${product.name}`, "info");
   }
@@ -368,7 +444,7 @@ class DemoSceneLogic {
 
     this.sceneEntryMap.set(String(scene.id), scene);
 
-    this.updateState({ loading: true });
+    this.updateState({ loading: true, currentSceneId: String(scene.id) });
     this.state.currentSceneId = String(scene.id);
 
     await this.loadScene();
@@ -385,12 +461,15 @@ class DemoSceneLogic {
     if (itemId === "instructions") {
       this.updateState({ showInstructions: true, activePanel: "instructions" });
     } else if (itemId === "cart") {
-      // Fetch cart items when cart panel is opened
       this.fetchCartItems();
       this.updateState({ activePanel: "cart" });
     } else {
       this.updateState({ activePanel: itemId as "products" | "scenes" | null });
     }
+  }
+
+  handleExitToStore(): void {
+    window.close();
   }
 
   closePanel(): void {
@@ -555,6 +634,10 @@ export function DemoSceneContent({
           products={state.allProducts}
           loading={state.productsLoading}
           currentProductId={state.currentProductId}
+          currentSceneId={state.currentSceneId}
+          currentSceneType={
+            state.currentSceneId ? logic.getSceneEntry(String(state.currentSceneId))?.type || null : null
+          }
           onSelectProduct={(product) => {
             logic.switchProduct(product);
             logic.closePanel();
@@ -583,6 +666,10 @@ export function DemoSceneContent({
           products={state.cartProducts}
           loading={state.cartLoading}
           currentProductId={state.currentProductId}
+          currentSceneId={state.currentSceneId}
+          currentSceneType={
+            state.currentSceneId ? logic.getSceneEntry(String(state.currentSceneId))?.type || null : null
+          }
           onSelectProduct={(product) => {
             logic.switchProduct(product);
             logic.closePanel();

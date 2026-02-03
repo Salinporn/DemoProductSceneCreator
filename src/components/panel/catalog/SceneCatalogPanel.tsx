@@ -146,7 +146,7 @@ export function VRSceneCatalogPanel({
 
         {/* Label */}
         <Text
-          position={[-cardWidth / 2 + 0.07, 0.012, 0.01]}
+          position={[-cardWidth / 2 + 0.1, 0.012, 0.01]}
           fontSize={0.028}
           color={isActive ? activeLbl : "#334155"}
           anchorX="left"
@@ -157,9 +157,8 @@ export function VRSceneCatalogPanel({
           {scene.label}
         </Text>
 
-        {/* Active badge */}
         {isActive && (
-          <group position={[cardWidth / 2 - 0.055, 0, 0.012]}>
+          <group position={[cardWidth / 2 - 0.13, -0.03, 0.02]}>
             <mesh>
               <planeGeometry args={[0.075, 0.035]} />
               <meshStandardMaterial color="#059669" roughness={0.4} />
@@ -242,7 +241,7 @@ export function VRSceneCatalogPanel({
         </Text>
       ) : (
         <group>
-          {/* --- PRODUCT SCENES --- */}
+          {/* --- DEFAULT SCENES --- */}
           {displayScenes.length > 0 && (
             <>
               <Text
@@ -253,14 +252,14 @@ export function VRSceneCatalogPanel({
                 anchorY="middle"
                 fontWeight="600"
               >
-                PRODUCT SCENES
+                DEFAULT ROOMS
               </Text>
               {displayScenes.map((scene, idx) => {
                 const col = idx % itemsPerRow;
                 const row = Math.floor(idx / itemsPerRow);
                 return renderCard(
                   scene,
-                  `scene-${scene.id}`,
+                  `default-room-${scene.id}`,
                   getCardX(col),
                   displayCardsTopY - row * itemHeight - cardHeight / 2,
                   false

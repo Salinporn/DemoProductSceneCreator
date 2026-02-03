@@ -15,8 +15,8 @@ export interface CartProduct {
   rating?: number;
   display_scenes_ids?: number[];
   model_id?: number;
-  quantity?: number;
-  cart_item_id?: number;
+  quantity: number;
+  cart_item_id: number;
 }
 
 interface VRCartCatalogPanelProps {
@@ -24,6 +24,8 @@ interface VRCartCatalogPanelProps {
   products: CartProduct[];
   loading: boolean;
   currentProductId: string | number | null;
+  currentSceneId: string | number | null;
+  currentSceneType: "display_scene" | "digital_home" | null;
   onSelectProduct: (product: CartProduct) => void;
   onClose: () => void;
 }
@@ -33,6 +35,8 @@ export function VRCartCatalogPanel({
   products,
   loading,
   currentProductId,
+  currentSceneId,
+  currentSceneType,
   onSelectProduct,
   onClose,
 }: VRCartCatalogPanelProps) {
@@ -40,6 +44,17 @@ export function VRCartCatalogPanel({
   const [hoveredButton, setHoveredButton] = React.useState<string | null>(null);
 
   if (!show) return null;
+
+  const canViewInCurrentScene = (product: CartProduct): boolean => {
+    if (currentSceneType === "digital_home") return true;
+    
+    if (currentSceneType === "display_scene" && currentSceneId) {
+      const sceneId = Number(currentSceneId);
+      return (product.display_scenes_ids || []).includes(sceneId);
+    }
+    
+    return true;
+  };
 
   const itemsPerRow = 3;
   const rows = Math.ceil(products.length / itemsPerRow);
@@ -55,6 +70,8 @@ export function VRCartCatalogPanel({
   );
   const panelWidth = 1.05;
 
+  const inDisplayScene = currentSceneType === "display_scene";
+
   return (
     <group>
       {/* Main background */}
@@ -63,7 +80,7 @@ export function VRCartCatalogPanel({
           width={panelWidth}
           height={panelHeight}
           radius={0.1}
-          color1="#F0F7FF"
+          color1="#EAF4FA"
           color2="#F5F7FA"
           opacity={0.7}
         />
@@ -89,8 +106,22 @@ export function VRCartCatalogPanel({
         anchorY="middle"
         fontWeight="semi-bold"
       >
-        🛒 My Cart Items
+        🛒 Cart Items
       </Text>
+
+      {inDisplayScene && (
+        <Text
+          position={[0, panelHeight / 2 - 0.2, 0.01]}
+          fontSize={0.022}
+          color="#DC2626"
+          anchorX="center"
+          anchorY="middle"
+          maxWidth={0.9}
+          textAlign="center"
+        >
+          ⚠️ Only products with this room can be viewed here
+        </Text>
+      )}
 
       {/* Close Button */}
       <group
@@ -137,7 +168,7 @@ export function VRCartCatalogPanel({
             anchorX="center"
             anchorY="middle"
           >
-            Loading cart items...
+            Loading cart...
           </Text>
         </group>
       ) : products.length === 0 ? (
@@ -175,6 +206,7 @@ export function VRCartCatalogPanel({
             const itemKey = String(product.id);
             const isHovered = hoveredItem === itemKey;
             const isActive = String(currentProductId) === itemKey;
+            const isCompatible = canViewInCurrentScene(product);
 
             const price =
               product.digital_price && product.digital_price !== "None"
@@ -185,13 +217,13 @@ export function VRCartCatalogPanel({
                   : null;
 
             return (
-              <group key={`cart-product-${itemKey}-${itemIndex}`} position={[x, y, 0.02]}>
+              <group key={`cart-${itemKey}-${itemIndex}`} position={[x, y, 0.02]}>
                 {/* Card background */}
                 <mesh
                   position={[0, 0, 0]}
                   onPointerEnter={(e) => {
                     e.stopPropagation();
-                    setHoveredItem(itemKey);
+                    if (isCompatible) setHoveredItem(itemKey);
                   }}
                   onPointerLeave={(e) => {
                     e.stopPropagation();
@@ -199,7 +231,9 @@ export function VRCartCatalogPanel({
                   }}
                   onPointerDown={(e) => {
                     e.stopPropagation();
-                    onSelectProduct(product);
+                    if (isCompatible) {
+                      onSelectProduct(product);
+                    }
                   }}
                 >
                   <CardBackground
@@ -207,20 +241,24 @@ export function VRCartCatalogPanel({
                     height={cardHeight}
                     radius={0.04}
                     colorTop={
-                      isActive
-                        ? "#6366F1"
-                        : isHovered
-                          ? "#C7D2FE"
-                          : "#E0E7FF"
+                      !isCompatible
+                        ? "#94A3B8"
+                        : isActive
+                          ? "#3FA4CE"
+                          : isHovered
+                            ? "#C7E4FA"
+                            : "#DCEEFB"
                     }
                     colorBottom={
-                      isActive
-                        ? "#818CF8"
-                        : isHovered
-                          ? "#E0E7FF"
-                          : "#F0F2F5"
+                      !isCompatible
+                        ? "#CBD5E1"
+                        : isActive
+                          ? "#66B9E2"
+                          : isHovered
+                            ? "#E6F0F7"
+                            : "#F0F2F5"
                     }
-                    opacity={isActive ? 0.65 : 0.5}
+                    opacity={!isCompatible ? 0.3 : isActive ? 0.65 : 0.5}
                     topStrength={isActive ? 2.8 : isHovered ? 2.8 : 2.5}
                   />
                 </mesh>
@@ -241,9 +279,21 @@ export function VRCartCatalogPanel({
                   <mesh position={[0, 0, 0.005]}>
                     <RoundedPlane width={cardWidth + 0.008} height={cardHeight + 0.008} radius={0.043} />
                     <meshBasicMaterial
-                      color="#6366F1"
+                      color="#3FA4CE"
                       transparent
                       opacity={0.6}
+                    />
+                  </mesh>
+                )}
+
+                {/* Incompatible overlay */}
+                {!isCompatible && (
+                  <mesh position={[0, 0, 0.015]}>
+                    <RoundedPlane width={cardWidth} height={cardHeight} radius={0.04} />
+                    <meshBasicMaterial
+                      color="#1E293B"
+                      transparent
+                      opacity={0.5}
                     />
                   </mesh>
                 )}
@@ -274,32 +324,43 @@ export function VRCartCatalogPanel({
                   )}
                 </group>
 
-                {/* Quantity badge */}
-                {product.quantity && product.quantity > 1 && (
-                  <group position={[0.08, 0.15, 0.02]}>
-                    <mesh>
-                      <circleGeometry args={[0.025, 16]} />
-                      <meshStandardMaterial color="#EF4444" />
-                    </mesh>
-                    <Text
-                      position={[0, 0, 0.003]}
-                      fontSize={0.02}
-                      color="#ffffff"
-                      anchorX="center"
-                      anchorY="middle"
-                      fontWeight="700"
-                    >
-                      {product.quantity}
-                    </Text>
-                  </group>
+                {/* Lock icon for incompatible products */}
+                {!isCompatible && (
+                  <Text
+                    position={[0, 0.1, 0.02]}
+                    fontSize={0.08}
+                    color="#66B9E2"
+                    anchorX="center"
+                    anchorY="middle"
+                  >
+                    🛡
+                  </Text>
                 )}
 
+                {/* Quantity badge */}
+                <group position={[0.08, 0.18, 0.02]}>
+                  <mesh>
+                    <circleGeometry args={[0.035, 16]} />
+                    <meshStandardMaterial color="#EF4444" roughness={0.5} />
+                  </mesh>
+                  <Text
+                    position={[0, 0, 0.003]}
+                    fontSize={0.025}
+                    color="#ffffff"
+                    anchorX="center"
+                    anchorY="middle"
+                    fontWeight="700"
+                  >
+                    {product.quantity}
+                  </Text>
+                </group>
+
                 {/* Category badge */}
-                {product.category && (
+                {product.category && isCompatible && (
                   <group position={[-0.05, -0.05, 0.02]}>
                     <mesh>
                       <planeGeometry args={[0.14, 0.045]} />
-                      <meshStandardMaterial color="#818CF8" roughness={0.5} />
+                      <meshStandardMaterial color="#66B9E2" roughness={0.5} />
                     </mesh>
                     <Text
                       position={[0, 0, 0.003]}
@@ -320,7 +381,7 @@ export function VRCartCatalogPanel({
                 <Text
                   position={[0, -0.12, 0.02]}
                   fontSize={0.028}
-                  color="#334155"
+                  color={!isCompatible ? "#64748B" : "#334155"}
                   anchorX="center"
                   anchorY="middle"
                   maxWidth={cardWidth - 0.06}
@@ -337,28 +398,13 @@ export function VRCartCatalogPanel({
                   <Text
                     position={[0, -0.17, 0.02]}
                     fontSize={0.025}
-                    color={isActive ? "#4338CA" : "#6366F1"}
+                    color={!isCompatible ? "#64748B" : isActive ? "#1E40AF" : "#0369A1"}
                     anchorX="center"
                     anchorY="middle"
                     fontWeight="600"
                   >
                     {price}
                   </Text>
-                )}
-
-                {isActive && (
-                  <group position={[0, -0.2, 0.02]}>
-                    <Text
-                      position={[0, 0, 0]}
-                      fontSize={0.02}
-                      color="#059669"
-                      anchorX="center"
-                      anchorY="middle"
-                      fontWeight="600"
-                    >
-                      ✓ Viewing
-                    </Text>
-                  </group>
                 )}
               </group>
             );
