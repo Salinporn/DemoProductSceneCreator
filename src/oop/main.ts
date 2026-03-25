@@ -12,7 +12,7 @@ class DigitalHomePlatform {
   private scene: Scene;
   private currentHome: Home | null = null;
   private activeRooms: Map<number, Room> = new Map();
-  private furnitureRegistry: Map<number, Furniture> = new Map();\
+  private furnitureRegistry: Map<number, Furniture> = new Map();
   private isRunning: boolean = false;
 
   constructor() {

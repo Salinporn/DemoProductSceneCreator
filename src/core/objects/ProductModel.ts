@@ -96,6 +96,7 @@ export class ProductModel {
   }
 
   async loadModel(scene: THREE.Scene): Promise<void> {
+    void scene;
     if (!this.modelPath) {
       return;
     }

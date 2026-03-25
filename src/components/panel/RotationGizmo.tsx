@@ -232,6 +232,7 @@ export function RotationGizmo({
   visible,
   currentRotation = [0, 0, 0]
 }: RotationGizmoProps) {
+  void currentRotation;
   const groupRef = useRef<THREE.Group>(null);
   const { camera } = useThree();
   const arcRadius = 0.6; 
