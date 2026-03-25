@@ -64,6 +64,7 @@ class DemoSceneLogic {
     setState: (updater: Partial<DemoState>) => void
   ) {
     this.setState = setState;
+    void productName;
     this.state = {
       showInstructions: true,
       showNotification: false,
@@ -514,6 +515,7 @@ export function DemoSceneContent({
   productName,
   apiBase,
 }: DemoSceneContentProps) {
+  void apiBase;
   const { scene, camera } = useThree();
   const xr = useXR();
 

@@ -36,6 +36,7 @@ export class SceneModel {
   getModelGroup(): THREE.Group { return this.modelGroup; }
 
   async loadModel(scene: THREE.Scene): Promise<void> {
+    void scene;
     if (!this.modelPath) {
       return;
     }
