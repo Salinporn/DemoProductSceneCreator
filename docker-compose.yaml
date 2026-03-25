@@ -3,7 +3,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: digitalhome-scenecreator
+    container_name: digitalhome-productdemo
     ports:
       - "3010:80"
     environment:
