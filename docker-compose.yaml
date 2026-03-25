@@ -5,7 +5,7 @@ services:
       dockerfile: Dockerfile
     container_name: digitalhome-scenecreator
     ports:
-      - "3002:80"
+      - "3010:80"
     environment:
       VITE_API_URL: ${VITE_API_URL}
       VITE_DIGITAL_HOME_PLATFORM_URL: ${VITE_DIGITAL_HOME_PLATFORM_URL}
