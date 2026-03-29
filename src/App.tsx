@@ -1,11 +1,52 @@
-import { Routes, Route} from 'react-router-dom';
-import { DemoProductSceneCreator } from './pages/DemoProductSceneCreator';
+import { HashRouter, Routes, Route } from 'react-router-dom';
+import { Login } from './pages/auth/Login';
+import { SceneLandingRedirect } from './pages/SceneLandingRedirect';
+import { NotAuthorized } from './pages/auth/NotAuthorized';
+import { SceneCreator } from './pages/SceneCreator';
+import { ProtectedRoute } from './pages/auth/ProtectedRoute';
+import { AddModel } from './pages/AddModel';
+import { ProductLibrary } from './pages/ProductLibrary';
 
 function App() {
   return (
-    <Routes>
-      <Route path="/" element={<DemoProductSceneCreator />} />
-    </Routes>
+    <HashRouter>
+      <Routes>
+        <Route path="/login" element={<Login />} />
+        <Route path="/unauthorized" element={<NotAuthorized />} />
+        <Route
+          path="/"
+          element={
+            <ProtectedRoute>
+              <SceneLandingRedirect />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/scene/:homeId"
+          element={
+            <ProtectedRoute>
+              <SceneCreator />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/add-model"
+          element={
+            <ProtectedRoute>
+              <AddModel />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/product-library"
+          element={
+            <ProtectedRoute>
+              <ProductLibrary />
+            </ProtectedRoute>
+          }
+        />
+      </Routes>
+    </HashRouter>
   );
 }
 

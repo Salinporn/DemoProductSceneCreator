@@ -23,10 +23,10 @@ interface VRCartCatalogPanelProps {
   show: boolean;
   products: CartProduct[];
   loading: boolean;
-  currentProductId: string | number | null;
+  placedInSceneCartUnitKeys: string[];
   currentSceneId: string | number | null;
   currentSceneType: "display_scene" | "digital_home" | null;
-  onSelectProduct: (product: CartProduct) => void;
+  onSelectProduct: (product: CartProduct, cartUnitKey: string) => void;
   onClose: () => void;
 }
 
@@ -34,7 +34,7 @@ export function VRCartCatalogPanel({
   show,
   products,
   loading,
-  currentProductId,
+  placedInSceneCartUnitKeys,
   currentSceneId,
   currentSceneType,
   onSelectProduct,
@@ -42,6 +42,36 @@ export function VRCartCatalogPanel({
 }: VRCartCatalogPanelProps) {
   const [hoveredItem, setHoveredItem] = React.useState<string | null>(null);
   const [hoveredButton, setHoveredButton] = React.useState<string | null>(null);
+  const [pageIndex, setPageIndex] = React.useState(0);
+
+  const itemsPerRow = 3;
+  const rowsPerPage = 2;
+  const itemsPerPage = itemsPerRow * rowsPerPage;
+
+  React.useEffect(() => {
+    if (show) setPageIndex(0);
+  }, [show]);
+
+  const cartUnitSlots = React.useMemo(
+    () =>
+      products.flatMap((p) =>
+        Array.from({ length: Math.max(0, Math.floor(p.quantity)) }, (_, unitIndex) => ({
+          line: p,
+          unitIndex,
+        })),
+      ),
+    [products],
+  );
+
+  React.useEffect(() => {
+    const totalPages = Math.max(1, Math.ceil(cartUnitSlots.length / itemsPerPage));
+    setPageIndex((p) => Math.min(p, totalPages - 1));
+  }, [cartUnitSlots.length, itemsPerPage]);
+
+  const placedSet = React.useMemo(
+    () => new Set(placedInSceneCartUnitKeys),
+    [placedInSceneCartUnitKeys],
+  );
 
   if (!show) return null;
 
@@ -56,21 +86,26 @@ export function VRCartCatalogPanel({
     return true;
   };
 
-  const itemsPerRow = 3;
-  const rows = Math.ceil(products.length / itemsPerRow);
-
-  const headerHeight = 0.25;
+  const inDisplayScene = currentSceneType === "display_scene";
+  const headerHeight = inDisplayScene ? 0.34 : 0.25;
   const itemHeight = 0.52;
-  const topPadding = 0.005;
-  const bottomPadding = 0.03;
+  const topPadding = -0.06;
+  const bottomPadding = 0.06;
+  const pagerHeight = 0.1;
 
-  const panelHeight = Math.max(
-    1.2,
-    headerHeight + topPadding + rows * itemHeight + bottomPadding
-  );
+  const panelHeight =
+    headerHeight +
+    topPadding +
+    rowsPerPage * itemHeight +
+    pagerHeight;
   const panelWidth = 1.05;
 
-  const inDisplayScene = currentSceneType === "display_scene";
+  const totalPages = Math.max(1, Math.ceil(cartUnitSlots.length / itemsPerPage));
+  const safePage = Math.min(pageIndex, totalPages - 1);
+  const pageSlots = cartUnitSlots.slice(
+    safePage * itemsPerPage,
+    safePage * itemsPerPage + itemsPerPage,
+  );
 
   return (
     <group>
@@ -171,7 +206,7 @@ export function VRCartCatalogPanel({
             Loading cart...
           </Text>
         </group>
-      ) : products.length === 0 ? (
+      ) : cartUnitSlots.length === 0 ? (
         <Text
           position={[0, 0, 0.01]}
           fontSize={0.03}
@@ -183,7 +218,7 @@ export function VRCartCatalogPanel({
         </Text>
       ) : (
         <group>
-          {products.map((product, itemIndex) => {
+          {pageSlots.map(({ line: product, unitIndex }, itemIndex) => {
             const col = itemIndex % itemsPerRow;
             const row = Math.floor(itemIndex / itemsPerRow);
 
@@ -203,9 +238,9 @@ export function VRCartCatalogPanel({
               row * itemHeight -
               cardHeight / 2;
 
-            const itemKey = String(product.id);
-            const isHovered = hoveredItem === itemKey;
-            const isActive = String(currentProductId) === itemKey;
+            const hoverKey = `${product.cart_item_id}-u${unitIndex}`;
+            const isHovered = hoveredItem === hoverKey;
+            const isPlacedInScene = placedSet.has(hoverKey);
             const isCompatible = canViewInCurrentScene(product);
 
             const price =
@@ -217,13 +252,15 @@ export function VRCartCatalogPanel({
                   : null;
 
             return (
-              <group key={`cart-${itemKey}-${itemIndex}`} position={[x, y, 0.02]}>
-                {/* Card background */}
+              <group
+                key={`cart-${product.cart_item_id}-u${unitIndex}-p${safePage}`}
+                position={[x, y, 0.02]}
+              >
                 <mesh
                   position={[0, 0, 0]}
                   onPointerEnter={(e) => {
                     e.stopPropagation();
-                    if (isCompatible) setHoveredItem(itemKey);
+                    if (isCompatible) setHoveredItem(hoverKey);
                   }}
                   onPointerLeave={(e) => {
                     e.stopPropagation();
@@ -232,7 +269,7 @@ export function VRCartCatalogPanel({
                   onPointerDown={(e) => {
                     e.stopPropagation();
                     if (isCompatible) {
-                      onSelectProduct(product);
+                      onSelectProduct(product, hoverKey);
                     }
                   }}
                 >
@@ -243,27 +280,34 @@ export function VRCartCatalogPanel({
                     colorTop={
                       !isCompatible
                         ? "#94A3B8"
-                        : isActive
-                          ? "#3FA4CE"
-                          : isHovered
-                            ? "#C7E4FA"
-                            : "#DCEEFB"
+                        : isPlacedInScene && isHovered
+                          ? "#48b9e8"
+                          : isPlacedInScene
+                            ? "#3FA4CE"
+                            : isHovered
+                              ? "#C7E4FA"
+                              : "#DCEEFB"
                     }
                     colorBottom={
                       !isCompatible
                         ? "#CBD5E1"
-                        : isActive
-                          ? "#66B9E2"
-                          : isHovered
-                            ? "#E6F0F7"
-                            : "#F0F2F5"
+                        : isPlacedInScene && isHovered
+                          ? "#6a7c92"
+                          : isPlacedInScene
+                            ? "#4a5d73"
+                            : isHovered
+                              ? "#E6F0F7"
+                              : "#F0F2F5"
                     }
-                    opacity={!isCompatible ? 0.3 : isActive ? 0.65 : 0.5}
-                    topStrength={isActive ? 2.8 : isHovered ? 2.8 : 2.5}
+                    opacity={
+                      !isCompatible ? 0.3 : isPlacedInScene ? 0.68 : 0.5
+                    }
+                    topStrength={
+                      isPlacedInScene ? 2.2 : isHovered ? 2.8 : 2.5
+                    }
                   />
                 </mesh>
 
-                {/* Card shadow */}
                 <mesh position={[0, -0.01, -0.01]}>
                   <RoundedPlane width={cardWidth} height={cardHeight} radius={0.04} />
                   <meshStandardMaterial
@@ -274,8 +318,7 @@ export function VRCartCatalogPanel({
                   />
                 </mesh>
 
-                {/* Active border highlight */}
-                {isActive && (
+                {isPlacedInScene && (
                   <mesh position={[0, 0, 0.005]}>
                     <RoundedPlane width={cardWidth + 0.008} height={cardHeight + 0.008} radius={0.043} />
                     <meshBasicMaterial
@@ -286,7 +329,6 @@ export function VRCartCatalogPanel({
                   </mesh>
                 )}
 
-                {/* Incompatible overlay */}
                 {!isCompatible && (
                   <mesh position={[0, 0, 0.015]}>
                     <RoundedPlane width={cardWidth} height={cardHeight} radius={0.04} />
@@ -298,8 +340,7 @@ export function VRCartCatalogPanel({
                   </mesh>
                 )}
 
-                {/* Product Image */}
-                <group position={[0, 0.1, 0.01]}>
+                <group position={[0, 0.08, 0.01]}>
                   {product.image ? (
                     <mesh>
                       <planeGeometry args={[0.2, 0.2]} />
@@ -324,7 +365,6 @@ export function VRCartCatalogPanel({
                   )}
                 </group>
 
-                {/* Lock icon for incompatible products */}
                 {!isCompatible && (
                   <Text
                     position={[0, 0.1, 0.02]}
@@ -337,27 +377,8 @@ export function VRCartCatalogPanel({
                   </Text>
                 )}
 
-                {/* Quantity badge */}
-                <group position={[0.08, 0.18, 0.02]}>
-                  <mesh>
-                    <circleGeometry args={[0.035, 16]} />
-                    <meshStandardMaterial color="#EF4444" roughness={0.5} />
-                  </mesh>
-                  <Text
-                    position={[0, 0, 0.003]}
-                    fontSize={0.025}
-                    color="#ffffff"
-                    anchorX="center"
-                    anchorY="middle"
-                    fontWeight="700"
-                  >
-                    {product.quantity}
-                  </Text>
-                </group>
-
-                {/* Category badge */}
                 {product.category && isCompatible && (
-                  <group position={[-0.05, -0.05, 0.02]}>
+                  <group position={[-0.05, -0.06, 0.02]}>
                     <mesh>
                       <planeGeometry args={[0.14, 0.045]} />
                       <meshStandardMaterial color="#66B9E2" roughness={0.5} />
@@ -365,7 +386,7 @@ export function VRCartCatalogPanel({
                     <Text
                       position={[0, 0, 0.003]}
                       fontSize={0.018}
-                      color="#ffffff"
+                      color="#000000"
                       anchorX="center"
                       anchorY="middle"
                       fontWeight="600"
@@ -377,11 +398,16 @@ export function VRCartCatalogPanel({
                   </group>
                 )}
 
-                {/* Product name */}
                 <Text
                   position={[0, -0.12, 0.02]}
                   fontSize={0.028}
-                  color={!isCompatible ? "#64748B" : "#334155"}
+                  color={
+                    !isCompatible
+                      ? "#64748B"
+                      : isPlacedInScene
+                        ? "#e2e8f0"
+                        : "#334155"
+                  }
                   anchorX="center"
                   anchorY="middle"
                   maxWidth={cardWidth - 0.06}
@@ -393,12 +419,17 @@ export function VRCartCatalogPanel({
                     : product.name}
                 </Text>
 
-                {/* Price */}
                 {price && (
                   <Text
                     position={[0, -0.17, 0.02]}
                     fontSize={0.025}
-                    color={!isCompatible ? "#64748B" : isActive ? "#1E40AF" : "#0369A1"}
+                    color={
+                      !isCompatible
+                        ? "#64748B"
+                        : isPlacedInScene
+                          ? "#3FA4CE"
+                          : "#0369A1"
+                    }
                     anchorX="center"
                     anchorY="middle"
                     fontWeight="600"
@@ -409,6 +440,102 @@ export function VRCartCatalogPanel({
               </group>
             );
           })}
+
+          {totalPages > 1 && (
+            <group position={[0, -panelHeight / 2 + bottomPadding + pagerHeight * 0.45, 0.02]}>
+              <group
+                position={[-0.32, 0, 0]}
+                onPointerEnter={(e) => {
+                  e.stopPropagation();
+                  if (safePage > 0) setHoveredButton("prev");
+                }}
+                onPointerLeave={(e) => {
+                  e.stopPropagation();
+                  setHoveredButton(null);
+                }}
+                onPointerDown={(e) => {
+                  e.stopPropagation();
+                  if (safePage > 0) setPageIndex((p) => Math.max(0, p - 1));
+                }}
+              >
+                <mesh>
+                  <RoundedPlane width={0.14} height={0.07} radius={0.02} />
+                  <meshStandardMaterial
+                    color={
+                      safePage === 0
+                        ? "#CBD5E1"
+                        : hoveredButton === "prev"
+                          ? "#475569"
+                          : "#334155"
+                    }
+                    roughness={0.5}
+                  />
+                </mesh>
+                <Text
+                  position={[0, 0.005, 0.01]}
+                  fontSize={0.028}
+                  color={safePage === 0 ? "#94A3B8" : "#fff"}
+                  anchorX="center"
+                  anchorY="middle"
+                  fontWeight="600"
+                >
+                  Prev
+                </Text>
+              </group>
+
+              <Text
+                position={[0, -0.008, 0.01]}
+                fontSize={0.026}
+                color="#475569"
+                anchorX="center"
+                anchorY="middle"
+              >
+                {`${safePage + 1} / ${totalPages}`}
+              </Text>
+
+              <group
+                position={[0.32, 0, 0]}
+                onPointerEnter={(e) => {
+                  e.stopPropagation();
+                  if (safePage < totalPages - 1) setHoveredButton("next");
+                }}
+                onPointerLeave={(e) => {
+                  e.stopPropagation();
+                  setHoveredButton(null);
+                }}
+                onPointerDown={(e) => {
+                  e.stopPropagation();
+                  if (safePage < totalPages - 1) {
+                    setPageIndex((p) => Math.min(totalPages - 1, p + 1));
+                  }
+                }}
+              >
+                <mesh>
+                  <RoundedPlane width={0.14} height={0.07} radius={0.02} />
+                  <meshStandardMaterial
+                    color={
+                      safePage >= totalPages - 1
+                        ? "#CBD5E1"
+                        : hoveredButton === "next"
+                          ? "#475569"
+                          : "#334155"
+                    }
+                    roughness={0.5}
+                  />
+                </mesh>
+                <Text
+                  position={[0, 0.005, 0.01]}
+                  fontSize={0.028}
+                  color={safePage >= totalPages - 1 ? "#94A3B8" : "#fff"}
+                  anchorX="center"
+                  anchorY="middle"
+                  fontWeight="600"
+                >
+                  Next
+                </Text>
+              </group>
+            </group>
+          )}
         </group>
       )}
     </group>

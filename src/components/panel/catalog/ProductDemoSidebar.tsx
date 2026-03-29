@@ -13,13 +13,6 @@ interface SidebarItemData {
 
 const demoSidebarItems: SidebarItemData[] = [
   {
-    id: "products",
-    icon: "🛋️",
-    label: "Products",
-    color: "#3FA4CE",
-    description: "Browse all store products",
-  },
-  {
     id: "scenes",
     icon: "🏠",
     label: "Scenes",
