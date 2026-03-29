@@ -6,8 +6,7 @@ import * as THREE from "three";
 import { HeadLockedUI } from "../panel/common/HeadLockedUI";
 import { VRInstructionPanel } from "../panel/VRInstructionPanel";
 import { VRNotificationPanel } from "../panel/common/NotificationPanel";
-import { VRSidebar } from "../panel/sidebar/VRSidebar";
-import { VRProductCatalogPanel, StoreProduct } from "../panel/catalog/ProductCatalogPanel";
+import { VRSidebar } from "../panel/VRSidebar";
 import { VRSceneCatalogPanel, SceneEntry } from "../panel/catalog/SceneCatalogPanel";
 import { VRCartCatalogPanel, CartProduct } from "../panel/catalog/CartCatalogPanel";
 import { NavigationController, ProductEditController } from "../../core/controllers/XRProductController";
@@ -33,9 +32,7 @@ interface DemoState {
   productScale: number;
   productRotationY: number;
 
-  activePanel: "products" | "scenes" | "instructions" | "cart" | null;
-  allProducts: StoreProduct[];
-  productsLoading: boolean;
+  activePanel: "scenes" | "instructions" | "cart" | null;
   currentProductId: string;
   currentSceneId: string | null;
   scenes: SceneEntry[];
@@ -75,8 +72,6 @@ class DemoSceneLogic {
       productScale: 1.0,
       productRotationY: 0,
       activePanel: null,
-      allProducts: [],
-      productsLoading: true,
       currentProductId: productId,
       currentSceneId: sceneId,
       scenes: [],
@@ -298,27 +293,6 @@ class DemoSceneLogic {
     }
   }
 
-  async fetchAllProducts(): Promise<void> {
-    try {
-      const response = await makeAuthenticatedRequest("/products/list/", {
-        method: "POST",
-        body: new URLSearchParams({}),
-      });
-      if (!response.ok) {
-        this.updateState({ productsLoading: false });
-        return;
-      }
-      const data = await response.json();
-      this.updateState({
-        allProducts: data.products || [],
-        productsLoading: false,
-      });
-    } catch (error) {
-      console.error("Failed to fetch products:", error);
-      this.updateState({ productsLoading: false });
-    }
-  }
-
   async fetchCartItems(): Promise<void> {
     this.updateState({ cartLoading: true });
     try {
@@ -329,7 +303,9 @@ class DemoSceneLogic {
       }
 
       const cartData = await cartResponse.json();
-      const cartItems = cartData.items || [];
+      const cartItems = (cartData.items || []).filter(
+        (row: { type?: string }) => row.type !== "physical",
+      );
 
       const productPromises = cartItems.map(async (item: any) => {
         try {
@@ -402,8 +378,20 @@ class DemoSceneLogic {
     }
   }
 
-  async switchProduct(product: StoreProduct | CartProduct): Promise<void> {
-    if (String(product.id) === this.state.currentProductId) return;
+  async switchProduct(
+    product: CartProduct,
+    cartUnitKey?: string | null,
+  ): Promise<void> {
+    const fromCart =
+      "cart_item_id" in product &&
+      typeof (product as CartProduct).cart_item_id === "number";
+
+    if (String(product.id) === this.state.currentProductId && fromCart) {
+      return;
+    }
+    if (String(product.id) === this.state.currentProductId && !fromCart) {
+      return;
+    }
 
     if (!this.state.currentSceneId) {
       this.showNotificationMessage(
@@ -465,7 +453,7 @@ class DemoSceneLogic {
       this.fetchCartItems();
       this.updateState({ activePanel: "cart" });
     } else {
-      this.updateState({ activePanel: itemId as "products" | "scenes" | null });
+      this.updateState({ activePanel: itemId as "scenes" | null });
     }
   }
 
@@ -529,14 +517,13 @@ export function DemoSceneContent({
     productScale: 1.0,
     productRotationY: 0,
     activePanel: null,
-    allProducts: [],
-    productsLoading: true,
     currentProductId: productId,
     currentSceneId: sceneId,
     scenes: [],
     scenesLoading: true,
     cartProducts: [],
     cartLoading: false,
+    previewCartUnitKey: null,
   });
 
   const logicRef = useRef<DemoSceneLogic | null>(null);
@@ -566,7 +553,6 @@ export function DemoSceneContent({
     const loadAll = async () => {
       await logic.loadScene();
       await logic.loadProduct();
-      await logic.fetchAllProducts();
     };
     loadAll();
   }, []);
@@ -596,7 +582,6 @@ export function DemoSceneContent({
     );
   }
 
-  const showProductsPanel = state.activePanel === "products";
   const showScenesPanel = state.activePanel === "scenes";
   const showCartPanel = state.activePanel === "cart";
   const showInstructionsPanel = state.activePanel === "instructions" && state.showInstructions;
@@ -625,32 +610,15 @@ export function DemoSceneContent({
       <HeadLockedUI distance={1.6} horizontalOffset={0} verticalOffset={0} enabled={true}>
         <VRSidebar
           show={true}
-          activePanel={state.activePanel}
+          activeItemId={state.activePanel}
           onItemSelect={(itemId) => logic.handleSidebarSelect(itemId)}
-        />
-      </HeadLockedUI>
-
-      <HeadLockedUI distance={1.5} horizontalOffset={0.05} verticalOffset={0} enabled={showProductsPanel}>
-        <VRProductCatalogPanel
-          show={showProductsPanel}
-          products={state.allProducts}
-          loading={state.productsLoading}
-          currentProductId={state.currentProductId}
-          currentSceneId={state.currentSceneId}
-          currentSceneType={
-            state.currentSceneId ? logic.getSceneEntry(String(state.currentSceneId))?.type || null : null
-          }
-          onSelectProduct={(product) => {
-            logic.switchProduct(product);
-            logic.closePanel();
-          }}
-          onClose={() => logic.closePanel()}
         />
       </HeadLockedUI>
 
       <HeadLockedUI distance={1.5} horizontalOffset={0.05} verticalOffset={0} enabled={showScenesPanel}>
         <VRSceneCatalogPanel
           show={showScenesPanel}
+          defaultRooms={[]}
           scenes={state.scenes}
           loading={state.scenesLoading}
           currentSceneId={state.currentSceneId}
@@ -667,13 +635,13 @@ export function DemoSceneContent({
           show={showCartPanel}
           products={state.cartProducts}
           loading={state.cartLoading}
-          currentProductId={state.currentProductId}
+          placedInSceneCartUnitKeys={[]}
           currentSceneId={state.currentSceneId}
           currentSceneType={
             state.currentSceneId ? logic.getSceneEntry(String(state.currentSceneId))?.type || null : null
           }
-          onSelectProduct={(product) => {
-            logic.switchProduct(product);
+          onSelectProduct={(product, cartUnitKey) => {
+            void logic.switchProduct(product, cartUnitKey);
             logic.closePanel();
           }}
           onClose={() => logic.closePanel()}

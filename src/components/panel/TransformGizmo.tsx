@@ -1,11 +1,12 @@
 import { useState, useRef, useEffect } from "react";
-import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
+import { pass } from "three/tsl";
 
 interface TransformGizmoProps {
   position: [number, number, number];
   onMove: (axis: 'x' | 'y' | 'z', delta: number) => void;
   visible: boolean;
+  axisSigns?: Partial<Record<'x' | 'y' | 'z', number>>;
 }
 
 interface AxisArrowProps {
@@ -13,100 +14,106 @@ interface AxisArrowProps {
   color: string;
   position: [number, number, number];
   rotation: [number, number, number];
-  onAxisDrag: (axis: 'x' | 'y' | 'z', delta: number) => void;
+  worldAxis: THREE.Vector3;
+  onAxisDrag: (worldAxis: THREE.Vector3, delta: number) => void;
+  renderOrder?: number;
 }
 
-function AxisArrow({ axis, color, position, rotation, onAxisDrag }: AxisArrowProps) {
+function AxisArrow({ axis, color, position, rotation, worldAxis, onAxisDrag, renderOrder = 1 }: AxisArrowProps) {
   const [hovered, setHovered] = useState(false);
   const [dragging, setDragging] = useState(false);
   const dragStartRef = useRef<THREE.Vector3 | null>(null);
   const meshRef = useRef<THREE.Mesh>(null);
 
-  useEffect(() => {
-    console.log(`[AxisArrow-${axis}] Component mounted`);
-  }, [axis]);
-
   const handlePointerDown = (e: any) => {
-    console.log(`[AxisArrow-${axis}] ⬇️  onPointerDown - START DRAG`);
-    
     e.stopPropagation();
     setDragging(true);
-
-  
+    setHovered(true);
     if (e.point) {
       dragStartRef.current = new THREE.Vector3(e.point.x, e.point.y, e.point.z);
-      console.log(`[AxisArrow-${axis}] Drag reference set:`, dragStartRef.current);
+    }
+
+    if (e.target?.setPointerCapture && typeof e.pointerId !== "undefined") {
+      try {
+        e.target.setPointerCapture(e.pointerId);
+      } catch {
+        // ignore
+      }
     }
   };
 
   const handlePointerMove = (e: any) => {
-    if (!dragging || !dragStartRef.current) {
-      return;
-    }
-
+    if (!dragging || !dragStartRef.current) return;
     e.stopPropagation();
-
     if (!e.point) return;
 
     const currentPoint = new THREE.Vector3(e.point.x, e.point.y, e.point.z);
+    const diff = currentPoint.clone().sub(dragStartRef.current);
 
-    let delta = 0;
-    switch (axis) {
-      case 'x':
-        delta = currentPoint.x - dragStartRef.current.x;
-        break;
-      case 'y':
-        delta = currentPoint.y - dragStartRef.current.y;
-        break;
-      case 'z':
-        delta = currentPoint.z - dragStartRef.current.z;
-        break;
-    }
+    const delta = diff.dot(worldAxis);
 
     if (Math.abs(delta) > 0.001) {
-      console.log(`[AxisArrow-${axis}] 🔄 onPointerMove - delta: ${delta.toFixed(4)}`);
       dragStartRef.current = currentPoint;
-      onAxisDrag(axis, delta);
+      onAxisDrag(worldAxis, delta);
     }
   };
 
   const handlePointerUp = (e: any) => {
     if (!dragging) return;
-
-    console.log(`[AxisArrow-${axis}] ⬆️  onPointerUp - END DRAG`);
-    
     e.stopPropagation();
+    if (e.target?.releasePointerCapture && typeof e.pointerId !== "undefined") {
+      try {
+        e.target.releasePointerCapture(e.pointerId);
+      } catch {
+        // ignore
+      }
+    }
     setDragging(false);
+    setHovered(false);
     dragStartRef.current = null;
+    document.body.style.cursor = 'auto';
+  };
+
+  const handlePointerCancel = (e: any) => {
+    if (!dragging) return;
+    e.stopPropagation();
+    if (e.target?.releasePointerCapture && typeof e.pointerId !== "undefined") {
+      try {
+        e.target.releasePointerCapture(e.pointerId);
+      } catch {
+        // ignore
+      }
+    }
+    setDragging(false);
+    setHovered(false);
+    dragStartRef.current = null;
+    document.body.style.cursor = 'auto';
   };
 
   useEffect(() => {
     if (!dragging) return;
-
-    const handleGlobalPointerUp = () => {
-      console.log(`[AxisArrow-${axis}] ⬆️ onPointerUp - END DRAG (global)`);
+    const handleGlobalPointerEnd = () => {
       setDragging(false);
       dragStartRef.current = null;
+      setHovered(false);
+      document.body.style.cursor = 'auto';
     };
-
-    document.addEventListener('pointerup', handleGlobalPointerUp);
-
+    document.addEventListener('pointerup', handleGlobalPointerEnd);
+    document.addEventListener('pointercancel', handleGlobalPointerEnd);
     return () => {
-      document.removeEventListener('pointerup', handleGlobalPointerUp);
+      document.removeEventListener('pointerup', handleGlobalPointerEnd);
+      document.removeEventListener('pointercancel', handleGlobalPointerEnd);
     };
-  }, [dragging, axis]);
+  }, [dragging]);
 
   const handlePointerEnter = (e: any) => {
-    console.log(`[AxisArrow-${axis}] 👆 onPointerEnter - HOVER ON`);
     e.stopPropagation();
     setHovered(true);
     document.body.style.cursor = 'grab';
   };
 
   const handlePointerLeave = (e: any) => {
-    if (dragging) return; 
-
-    console.log(`[AxisArrow-${axis}] 👋 onPointerLeave - HOVER OFF`);
+    if (dragging) return;
     e.stopPropagation();
     setHovered(false);
     document.body.style.cursor = 'auto';
@@ -116,29 +123,24 @@ function AxisArrow({ axis, color, position, rotation, onAxisDrag }: AxisArrowPro
 
   return (
     <group position={position} rotation={rotation}>
-   
       <mesh
         ref={meshRef}
+        renderOrder={renderOrder}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerCancel}
         onPointerEnter={handlePointerEnter}
         onPointerLeave={handlePointerLeave}
         userData={{ isGizmo: true, axis }}
       >
-      
         <cylinderGeometry args={[0.2, 0.2, 0.7, 8]} />
-        <meshBasicMaterial 
-          visible={true}
-          depthTest={false}
-          depthWrite={true}
-        />
+        <meshBasicMaterial visible={false} depthTest={false} depthWrite={false} />
       </mesh>
 
-    
-      <mesh position={[0, 0, 0]}>
+      <mesh position={[0, 0, 0]} renderOrder={renderOrder}>
         <cylinderGeometry args={[0.012, 0.012, 0.22, 12]} />
-        <meshBasicMaterial 
+        <meshBasicMaterial
           color={arrowColor}
           depthTest={false}
           depthWrite={false}
@@ -147,10 +149,9 @@ function AxisArrow({ axis, color, position, rotation, onAxisDrag }: AxisArrowPro
         />
       </mesh>
 
-
-      <mesh position={[0, 0.14, 0]}>
+      <mesh position={[0, 0.14, 0]} renderOrder={renderOrder}>
         <coneGeometry args={[0.05, 0.12, 12]} />
-        <meshBasicMaterial 
+        <meshBasicMaterial
           color={arrowColor}
           depthTest={false}
           depthWrite={false}
@@ -159,56 +160,38 @@ function AxisArrow({ axis, color, position, rotation, onAxisDrag }: AxisArrowPro
         />
       </mesh>
 
-   
-      <mesh position={[0, 0.22, 0]}>
+      <mesh position={[0, 0.22, 0]} renderOrder={renderOrder}>
         <sphereGeometry args={[0.025, 8, 8]} />
-        <meshBasicMaterial 
-          color={arrowColor}
-          depthTest={false}
-          depthWrite={false}
-        />
+        <meshBasicMaterial color={arrowColor} depthTest={false} depthWrite={false} />
       </mesh>
     </group>
   );
 }
 
-export function TransformGizmo({ position, onMove, visible }: TransformGizmoProps) {
-  const groupRef = useRef<THREE.Group>(null);
-  const { camera } = useThree();
+export function TransformGizmo({ position, onMove, visible, axisSigns }: TransformGizmoProps) {
+  if (!visible) return null;
 
-  useEffect(() => {
-    console.log(`[TransformGizmo] Mounted, visible: ${visible}`);
-  }, []);
+  const xSign = axisSigns?.x ?? 1;
+  const ySign = axisSigns?.y ?? 1;
+  const zSign = axisSigns?.z ?? 1;
 
+  const handleAxisDrag = (worldAxisVec: THREE.Vector3, delta: number) => {
+    const x = worldAxisVec.x * delta;
+    const y = worldAxisVec.y * delta;
+    const z = worldAxisVec.z * delta;
 
-  useFrame(() => {
-    if (groupRef.current && visible && camera) {
-      const gizmoPos = new THREE.Vector3(...position);
-      const direction = new THREE.Vector3();
-      direction.subVectors(camera.position, gizmoPos);
-
-      const angle = Math.atan2(direction.x, direction.z);
-      groupRef.current.rotation.y = angle;
-    }
-  });
-
-  if (!visible) {
-    return null;
-  }
-
-  console.log(`[TransformGizmo] Rendering at position:`, position);
+    if (Math.abs(x) > 0.0001) onMove('x', x);
+    if (Math.abs(y) > 0.0001) onMove('y', y);
+    if (Math.abs(z) > 0.0001) onMove('z', z);
+  };
 
   return (
-    <group 
-      ref={groupRef} 
-      position={position}
-      userData={{ isGizmo: true }}
-    >
-    
-      <mesh userData={{ isGizmo: true }}>
+    <group position={position} userData={{ isGizmo: true }}>
+
+      <mesh renderOrder={1} userData={{ isGizmo: true }}>
         <sphereGeometry args={[0.1, 16, 16]} />
-        <meshBasicMaterial 
-          color="#000000" 
+        <meshBasicMaterial
+          color="#000000"
           depthTest={false}
           depthWrite={false}
           transparent
@@ -216,40 +199,34 @@ export function TransformGizmo({ position, onMove, visible }: TransformGizmoProp
         />
       </mesh>
 
-
       <AxisArrow
         axis="x"
         color="#FF0000"
-        position={[0.18, 0, 0]}
-        rotation={[0, 0, -Math.PI / 2]}
-        onAxisDrag={(axis, delta) => {
-          console.log(`[TransformGizmo] Callback: axis=${axis}, delta=${delta.toFixed(4)}`);
-          onMove(axis, delta);
-        }}
+        position={[0.18 * xSign, 0, 0]}
+        rotation={[0, 0, -Math.PI / 2 * xSign]}
+        worldAxis={new THREE.Vector3(xSign, 0, 0)}
+        onAxisDrag={handleAxisDrag}
+        renderOrder={2}
       />
 
-   
       <AxisArrow
         axis="y"
         color="#00FF00"
         position={[0, 0.18, 0]}
         rotation={[0, 0, 0]}
-        onAxisDrag={(axis, delta) => {
-          console.log(`[TransformGizmo] Callback: axis=${axis}, delta=${delta.toFixed(4)}`);
-          onMove(axis, delta);
-        }}
+        worldAxis={new THREE.Vector3(0, ySign, 0)}
+        onAxisDrag={handleAxisDrag}
+        renderOrder={2}
       />
-
 
       <AxisArrow
         axis="z"
         color="#0000FF"
-        position={[0, 0, 0.18]}
-        rotation={[Math.PI / 2, 0, 0]}
-        onAxisDrag={(axis, delta) => {
-          console.log(`[TransformGizmo] Callback: axis=${axis}, delta=${delta.toFixed(4)}`);
-          onMove(axis, delta);
-        }}
+        position={[0, 0, -0.18 * zSign]}
+        rotation={[-Math.PI / 2 * zSign, 0, 0]}
+        worldAxis={new THREE.Vector3(0, 0, zSign)}
+        onAxisDrag={handleAxisDrag}
+        renderOrder={3}
       />
     </group>
   );

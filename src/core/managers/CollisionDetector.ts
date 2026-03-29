@@ -24,9 +24,14 @@ export class CollisionDetector {
   public furnitureBoxes: Map<string, THREE.Box3> = new Map();
   private furnitureTransforms: Map<string, TransformData> = new Map();
   private roomBox: THREE.Box3 | null = null;
+  private roomBoxLocal: THREE.Box3 | null = null;
+  private roomWorldToLocal: THREE.Matrix4 | null = null;
+  private roomLocalToWorld: THREE.Matrix4 | null = null;
+  private roomLocalToWorldNormalMatrix: THREE.Matrix3 | null = null;
   private helperMeshes: Map<string, THREE.Mesh> = new Map();
   private showDebugBoxes: boolean = false;
   private readonly EPSILON = 0.01;
+  private readonly STATIC_PREFIX = 'static-home-';
 
   private constructor() {}
 
@@ -67,8 +72,44 @@ export class CollisionDetector {
     );
   }
 
+  setRoomBoundaryFromBox3(box: THREE.Box3): void {
+    this.roomBox = box.clone();
+  }
+
+  setRoomBoundaryLocalFromBox3(
+    localRoomBox: THREE.Box3,
+    worldToLocal: THREE.Matrix4
+  ): void {
+    this.roomBoxLocal = localRoomBox.clone();
+    this.roomWorldToLocal = worldToLocal.clone();
+    this.roomLocalToWorld = new THREE.Matrix4().copy(worldToLocal).invert();
+    this.roomLocalToWorldNormalMatrix = new THREE.Matrix3().setFromMatrix4(
+      this.roomLocalToWorld
+    );
+  }
+
   getRoomBoundary(): THREE.Box3 | null {
     return this.roomBox;
+  }
+
+  private transformBoxToLocal(boxWorld: THREE.Box3, worldToLocal: THREE.Matrix4): THREE.Box3 {
+    const corners = [
+      new THREE.Vector3(boxWorld.min.x, boxWorld.min.y, boxWorld.min.z),
+      new THREE.Vector3(boxWorld.min.x, boxWorld.min.y, boxWorld.max.z),
+      new THREE.Vector3(boxWorld.min.x, boxWorld.max.y, boxWorld.min.z),
+      new THREE.Vector3(boxWorld.min.x, boxWorld.max.y, boxWorld.max.z),
+      new THREE.Vector3(boxWorld.max.x, boxWorld.min.y, boxWorld.min.z),
+      new THREE.Vector3(boxWorld.max.x, boxWorld.min.y, boxWorld.max.z),
+      new THREE.Vector3(boxWorld.max.x, boxWorld.max.y, boxWorld.min.z),
+      new THREE.Vector3(boxWorld.max.x, boxWorld.max.y, boxWorld.max.z),
+    ];
+
+    const out = new THREE.Box3();
+    for (const c of corners) {
+      c.applyMatrix4(worldToLocal);
+      out.expandByPoint(c);
+    }
+    return out;
   }
 
   updateFurnitureBox(itemId: string, object: THREE.Object3D, modelId?: number): void {
@@ -107,6 +148,22 @@ export class CollisionDetector {
     this.helperMeshes.delete(itemId);
   }
 
+  registerStaticBox(index: number, box: THREE.Box3): void {
+    this.furnitureBoxes.set(`${this.STATIC_PREFIX}${index}`, box);
+  }
+
+  clearStaticObjects(): void {
+    for (const key of [...this.furnitureBoxes.keys()]) {
+      if (key.startsWith(this.STATIC_PREFIX)) {
+        this.furnitureBoxes.delete(key);
+        this.furnitureTransforms.delete(key);
+        const helper = this.helperMeshes.get(key);
+        if (helper?.parent) helper.parent.remove(helper);
+        this.helperMeshes.delete(key);
+      }
+    }
+  }
+
   checkRoomCollision(itemId: string): CollisionResult {
     const box = this.furnitureBoxes.get(itemId);
     
@@ -114,13 +171,59 @@ export class CollisionDetector {
       return { hasCollision: false, collidingObjects: [] };
     }
 
-    const isOutsideX = box.min.x < this.roomBox.min.x - this.EPSILON || 
-                       box.max.x > this.roomBox.max.x + this.EPSILON;
-    const isOutsideZ = box.min.z < this.roomBox.min.z - this.EPSILON || 
-                       box.max.z > this.roomBox.max.z + this.EPSILON;
-    const isThroughCeiling = box.max.y > this.roomBox.max.y + this.EPSILON;
+    // Oriented room collision
+    const roomLocalBox = this.roomBoxLocal;
+    if (roomLocalBox && this.roomWorldToLocal && this.roomLocalToWorld && this.roomLocalToWorldNormalMatrix) {
+      const localFurnitureBox = this.transformBoxToLocal(box, this.roomWorldToLocal);
+
+      const isOutsideX =
+        localFurnitureBox.min.x < roomLocalBox.min.x - this.EPSILON ||
+        localFurnitureBox.max.x > roomLocalBox.max.x + this.EPSILON;
+      const isOutsideZ =
+        localFurnitureBox.min.z < roomLocalBox.min.z - this.EPSILON ||
+        localFurnitureBox.max.z > roomLocalBox.max.z + this.EPSILON;
+      const isOutsideY =
+        localFurnitureBox.min.y < roomLocalBox.min.y - (this.EPSILON + 0.1) ||
+        localFurnitureBox.max.y >= roomLocalBox.max.y;
+
+      const hasCollision = isOutsideX || isOutsideZ || isOutsideY;
+      if (!hasCollision) {
+        return { hasCollision: false, collidingObjects: [] };
+      }
+
+      const centerLocal = new THREE.Vector3();
+      localFurnitureBox.getCenter(centerLocal);
+      const roomCenterLocal = new THREE.Vector3();
+      roomLocalBox.getCenter(roomCenterLocal);
+
+      const normalLocal = new THREE.Vector3().subVectors(roomCenterLocal, centerLocal);
+      normalLocal.y = 0;
+      normalLocal.normalize();
+
+      const normalWorld = normalLocal
+        .clone()
+        .applyMatrix3(this.roomLocalToWorldNormalMatrix)
+        .normalize();
+
+      return {
+        hasCollision: true,
+        collidingObjects: ['room'],
+        collisionNormal: normalWorld,
+      };
+    }
+
+    // Fallback: world AABB collision.
+    const isOutsideX =
+      box.min.x < this.roomBox.min.x - this.EPSILON ||
+      box.max.x > this.roomBox.max.x + this.EPSILON;
+    const isOutsideZ =
+      box.min.z < this.roomBox.min.z - this.EPSILON ||
+      box.max.z > this.roomBox.max.z + this.EPSILON;
+    const isOutsideY =
+      box.min.y < this.roomBox.min.y - (this.EPSILON + 0.1) ||
+      box.max.y >= this.roomBox.max.y;
     
-    const hasCollision = isOutsideX || isOutsideZ || isThroughCeiling;
+    const hasCollision = isOutsideX || isOutsideZ || isOutsideY;
     
     if (!hasCollision) {
       return { hasCollision: false, collidingObjects: [] };
@@ -141,6 +244,23 @@ export class CollisionDetector {
       collidingObjects: ['room'],
       collisionNormal: normal,
     };
+  }
+
+  checkRoomFloor(itemId: string): boolean {
+    const box = this.furnitureBoxes.get(itemId);
+    
+    if (!box || !this.roomBox) {
+      return false;
+    }
+
+    if (this.roomBoxLocal && this.roomWorldToLocal) {
+      const localFurnitureBox = this.transformBoxToLocal(box, this.roomWorldToLocal);
+      return localFurnitureBox.min.y <= this.roomBoxLocal.min.y;
+    }
+
+    const onFloor = box.min.y <= this.roomBox.min.y;
+    
+    return onFloor;
   }
 
   checkAABBCollisionOnly(itemId: string): boolean {
@@ -173,8 +293,14 @@ export class CollisionDetector {
       if (otherId === itemId) continue;
       if (!box.intersectsBox(otherBox)) continue;
 
+      // Static home objects have no modelId — AABB overlap is sufficient
+      if (otherId.startsWith(this.STATIC_PREFIX)) {
+        collidingObjects.push(otherId);
+        continue;
+      }
+
       const hasPreciseOverlap = await this.checkModelsOverlapWithApi(itemId, otherId);
-      
+
       if (hasPreciseOverlap) {
         collidingObjects.push(otherId);
       }
@@ -219,6 +345,44 @@ export class CollisionDetector {
 
   constrainToRoom(position: THREE.Vector3, itemBox: THREE.Box3): THREE.Vector3 {
     if (!this.roomBox) return position;
+
+    if (
+      this.roomBoxLocal &&
+      this.roomWorldToLocal &&
+      this.roomLocalToWorld
+    ) {
+      const localPos = position.clone().applyMatrix4(this.roomWorldToLocal);
+      const localBox = this.transformBoxToLocal(itemBox, this.roomWorldToLocal);
+
+      const size = new THREE.Vector3();
+      localBox.getSize(size);
+      const halfSize = size.clone().multiplyScalar(0.5);
+
+      const correctedLocal = localPos.clone();
+
+      // X
+      if (correctedLocal.x - halfSize.x < this.roomBoxLocal.min.x) {
+        correctedLocal.x = this.roomBoxLocal.min.x + halfSize.x;
+      }
+      if (correctedLocal.x + halfSize.x > this.roomBoxLocal.max.x) {
+        correctedLocal.x = this.roomBoxLocal.max.x - halfSize.x;
+      }
+
+      // Y (ceiling handled as max.y)
+      if (correctedLocal.y + halfSize.y > this.roomBoxLocal.max.y) {
+        correctedLocal.y = this.roomBoxLocal.max.y - halfSize.y;
+      }
+
+      // Z
+      if (correctedLocal.z - halfSize.z < this.roomBoxLocal.min.z) {
+        correctedLocal.z = this.roomBoxLocal.min.z + halfSize.z;
+      }
+      if (correctedLocal.z + halfSize.z > this.roomBoxLocal.max.z) {
+        correctedLocal.z = this.roomBoxLocal.max.z - halfSize.z;
+      }
+
+      return correctedLocal.applyMatrix4(this.roomLocalToWorld);
+    }
 
     const correctedPosition = position.clone();
     const size = new THREE.Vector3();
@@ -356,6 +520,40 @@ export class CollisionDetector {
     });
 
     return minDistance;
+  }
+
+  findSurfaceBelow(itemId: string): { hasSurface: boolean; surfaceY: number; supportingItemId: string | null } {
+    const box = this.furnitureBoxes.get(itemId);
+    if (!box || !this.roomBox) {
+      return { hasSurface: false, surfaceY: 0, supportingItemId: null };
+    }
+
+    const probeMaxY = box.min.y - this.EPSILON;
+    if (probeMaxY <= this.roomBox.min.y) {
+      return { hasSurface: false, surfaceY: 0, supportingItemId: null };
+    }
+
+    // Probe box: same X/Z footprint, extends from room floor to just below the item
+    const probeBox = new THREE.Box3(
+      new THREE.Vector3(box.min.x, this.roomBox.min.y, box.min.z),
+      new THREE.Vector3(box.max.x, probeMaxY, box.max.z)
+    );
+
+    let highestSurfaceY = this.roomBox.min.y;
+    let supportingItemId: string | null = null;
+
+    for (const [otherId, otherBox] of this.furnitureBoxes.entries()) {
+      if (otherId === itemId) continue;
+      if (otherBox.max.y >= box.min.y) continue;
+      if (probeBox.intersectsBox(otherBox)) {
+        if (otherBox.max.y > highestSurfaceY) {
+          highestSurfaceY = otherBox.max.y;
+          supportingItemId = otherId;
+        }
+      }
+    }
+
+    return { hasSurface: supportingItemId !== null, surfaceY: highestSurfaceY, supportingItemId };
   }
 
   getAllFurnitureBoxes(): Map<string, THREE.Box3> {

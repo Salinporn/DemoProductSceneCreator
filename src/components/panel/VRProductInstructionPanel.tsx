@@ -4,31 +4,31 @@ import { useState } from "react";
 
 const sections = [
   {
-    title: "Menu Controls",
-    color: "#1E40AF",
-    content: [
-      "Y or B button: Toggle furniture menu",
-      "X or A button: Toggle control panel",
-    ],
-  },
-  {
     title: "Navigation Mode",
     color: "#0b818a",
     content: [
       "Hold Grip on either controller to activate navigation mode",
-      "To rotate camera, move left/right on left thumbstick",
-      "To walk, move forward/back on right thumbstick",
+      "Left thumbstick: Rotate camera left/right",
+      "Right thumbstick: Walk forward/backward and strafe left/right",
     ],
   },
   {
-    title: "Furniture Editing Mode",
+    title: "Product Controls",
     color: "#7C3AED",
     content: [
-      "Trigger: Select furniture from menu or scene",
-      "Grip: Deselect selected furniture",
-      "Right Thumbstick: Move selected item",
-      "Left Thumbstick: Rotate selected item",
-      "Use sliders to adjust scale & rotation",
+      "Right Thumbstick: Move product around the scene",
+      "Left Thumbstick Left/Right: Rotate product",
+      "Left Thumbstick Up/Down: Scale product larger/smaller",
+      "Release Grip to switch to product control mode",
+    ],
+  },
+  {
+    title: "Tips",
+    color: "#1E40AF",
+    content: [
+      "Try the product in different positions and angles",
+      "See how it looks in different parts of the room",
+      "Adjust the size to fit your space",
     ],
   },
 ];
@@ -36,7 +36,6 @@ const sections = [
 export function VRInstructionPanel({ show, onClose }: { show: boolean; onClose: () => void }) {
   const [sectionIndex, setSectionIndex] = useState(0);
   const [hoveredButton, setHoveredButton] = useState<string | null>(null);
-
 
   if (!show) return null;
 
@@ -51,7 +50,7 @@ export function VRInstructionPanel({ show, onClose }: { show: boolean; onClose: 
 
       {/* Header */}
       <Text position={[0, 0.32, 0.01]} fontSize={0.05} color="#334155" anchorX="center" anchorY="middle" fontWeight="semi-bold">
-        Instructions
+        VR Product Preview - Instructions
       </Text>
 
       {/* Close Button */}
