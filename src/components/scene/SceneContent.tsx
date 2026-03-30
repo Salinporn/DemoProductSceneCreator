@@ -826,6 +826,17 @@ class SceneContentLogic {
       return;
     }
 
+    // Clear all placed items/furniture before changing the room
+    if (this.sceneManager) {
+      this.sceneManager.clearAllFurniture();
+    }
+    this.furnitureController?.setSelectedFurniture(null);
+    this.updateState({
+      cartUnitSpawnedFurnitureId: {},
+      selectedItemId: null,
+      showSlider: false,
+    });
+
     if (entry.type === "digital_home" && entry.homeId != null) {
 	  this.closeCatalogPanel();
 	  await this.loadHomeById(entry.homeId);
