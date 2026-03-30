@@ -10,7 +10,7 @@ import { VRSidebar } from "../panel/VRSidebar";
 import { VRSceneCatalogPanel, SceneEntry } from "../panel/catalog/SceneCatalogPanel";
 import { VRCartCatalogPanel, CartProduct } from "../panel/catalog/CartCatalogPanel";
 import { NavigationController, ProductEditController } from "../../core/controllers/XRProductController";
-import { makeAuthenticatedRequest } from "../../utils/API";
+import { makeAuthenticatedRequest } from "../../utils/Auth";
 import { ProductModel } from "../../core/objects/ProductModel";
 import { SceneModel } from "../../core/objects/SceneModel";
 import { DemoSceneManager } from "../../core/managers/DemoSceneManager";
@@ -35,10 +35,12 @@ interface DemoState {
   activePanel: "scenes" | "instructions" | "cart" | null;
   currentProductId: string;
   currentSceneId: string | null;
+  defaultRooms: SceneEntry[];
   scenes: SceneEntry[];
   scenesLoading: boolean;
   cartProducts: CartProduct[];
   cartLoading: boolean;
+  previewCartUnitKey?: string | null;
 }
 
 class DemoSceneLogic {
@@ -74,6 +76,7 @@ class DemoSceneLogic {
       activePanel: null,
       currentProductId: productId,
       currentSceneId: sceneId,
+      defaultRooms: [],
       scenes: [],
       scenesLoading: true,
       cartProducts: [],
@@ -282,7 +285,8 @@ class DemoSceneLogic {
         loading: false,
         productScale: 1.0,
         productRotationY: 0,
-        scenes: allScenes,
+        defaultRooms: productScenes,
+        scenes: homeScenes,
         scenesLoading: false,
         currentSceneId: initialSceneId,
       });
@@ -338,7 +342,7 @@ class DemoSceneLogic {
         }
       });
 
-      const products = await Promise.all(productPromises);
+      const products: Array<CartProduct | null> = await Promise.all(productPromises);
       const validProducts = products.filter((p): p is CartProduct => p !== null);
 
       this.updateState({
@@ -380,7 +384,7 @@ class DemoSceneLogic {
 
   async switchProduct(
     product: CartProduct,
-    cartUnitKey?: string | null,
+    _cartUnitKey?: string | null,
   ): Promise<void> {
     const fromCart =
       "cart_item_id" in product &&
@@ -519,6 +523,7 @@ export function DemoSceneContent({
     activePanel: null,
     currentProductId: productId,
     currentSceneId: sceneId,
+    defaultRooms: [],
     scenes: [],
     scenesLoading: true,
     cartProducts: [],
@@ -618,7 +623,7 @@ export function DemoSceneContent({
       <HeadLockedUI distance={1.5} horizontalOffset={0.05} verticalOffset={0} enabled={showScenesPanel}>
         <VRSceneCatalogPanel
           show={showScenesPanel}
-          defaultRooms={[]}
+          defaultRooms={state.defaultRooms}
           scenes={state.scenes}
           loading={state.scenesLoading}
           currentSceneId={state.currentSceneId}
