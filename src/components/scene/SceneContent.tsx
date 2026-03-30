@@ -1,6 +1,5 @@
 import * as React from "react";
 import { useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { Environment, PerspectiveCamera } from "@react-three/drei";
 import { useXRStore, useXR } from "@react-three/xr";
 import { useFrame, useThree } from "@react-three/fiber";
@@ -189,7 +188,6 @@ class SceneContentLogic {
     updater: Partial<SceneState> | ((prev: SceneState) => Partial<SceneState>),
   ) => void;
   private homeId: string;
-  private navigate: ((path: string) => void) | null = null;
   private sceneEntryMap: Map<string, SceneEntry> = new Map();
   private displaySceneUrlCache: Map<number, string> = new Map();
 
@@ -219,10 +217,6 @@ class SceneContentLogic {
   private textureCache: Map<string, TextureOption[]> = new Map();
   private textureLoadingCache: Map<string, Promise<void>> = new Map();
   public lassoHandledByPrimitiveRef: { current: boolean } | null = null;
-
-  setNavigate(fn: (path: string) => void): void {
-    this.navigate = fn;
-  }
 
   constructor(
     homeId: string,
@@ -3405,7 +3399,6 @@ class SceneContentLogic {
 
 
 export function SceneContent({ homeId, digitalHome, arModeRequested }: SceneContentProps) {
-  const navigate = useNavigate();
   const { scene, camera } = useThree();
   const xr = useXR();
   const xrStore = useXRStore();
@@ -3488,7 +3481,6 @@ export function SceneContent({ homeId, digitalHome, arModeRequested }: SceneCont
     };
 
     logicRef.current = new SceneContentLogic(homeId, updateState);
-    logicRef.current.setNavigate(navigate);
     logicRef.current.lassoHandledByPrimitiveRef = lassoHandledByPrimitiveRef;
     logicRef.current.initializeManagers(scene);
     logicRef.current.setXRStore(xrStore);
@@ -3496,7 +3488,7 @@ export function SceneContent({ homeId, digitalHome, arModeRequested }: SceneCont
     return () => {
       logicRef.current?.cleanup();
     };
-  }, [homeId, navigate, scene, xrStore]);
+  }, [homeId, scene, xrStore]);
 
   useEffect(() => {
     if (!xr.session || !logicRef.current) return;
