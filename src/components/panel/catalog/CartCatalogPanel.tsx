@@ -333,7 +333,7 @@ export function VRCartCatalogPanel({
                   <mesh position={[0, 0, 0.015]}>
                     <RoundedPlane width={cardWidth} height={cardHeight} radius={0.04} />
                     <meshBasicMaterial
-                      color="#63b7f4"
+                      color="#5d7e9e"
                       transparent
                       opacity={0.5}
                     />
