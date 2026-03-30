@@ -88,7 +88,7 @@ export function VRCartCatalogPanel({
 
   const inDisplayScene = currentSceneType === "display_scene";
   const headerHeight = inDisplayScene ? 0.34 : 0.25;
-  const itemHeight = 0.52;
+  const itemHeight = 0.46;
   const topPadding = -0.06;
   const bottomPadding = 0.06;
   const pagerHeight = 0.1;
@@ -98,7 +98,7 @@ export function VRCartCatalogPanel({
     topPadding +
     rowsPerPage * itemHeight +
     pagerHeight;
-  const panelWidth = 1.05;
+  const panelWidth = 1;
 
   const totalPages = Math.max(1, Math.ceil(cartUnitSlots.length / itemsPerPage));
   const safePage = Math.min(pageIndex, totalPages - 1);
@@ -222,8 +222,8 @@ export function VRCartCatalogPanel({
             const col = itemIndex % itemsPerRow;
             const row = Math.floor(itemIndex / itemsPerRow);
 
-            const cardWidth = 0.27;
-            const cardHeight = 0.42;
+            const cardWidth = 0.25;
+            const cardHeight = 0.4;
             const cardSpacing = 0.05;
             const totalWidth =
               itemsPerRow * cardWidth + (itemsPerRow - 1) * cardSpacing;
@@ -283,7 +283,7 @@ export function VRCartCatalogPanel({
                         : isPlacedInScene && isHovered
                           ? "#48b9e8"
                           : isPlacedInScene
-                            ? "#3FA4CE"
+                            ? "#99bac8"
                             : isHovered
                               ? "#C7E4FA"
                               : "#DCEEFB"
@@ -322,9 +322,9 @@ export function VRCartCatalogPanel({
                   <mesh position={[0, 0, 0.005]}>
                     <RoundedPlane width={cardWidth + 0.008} height={cardHeight + 0.008} radius={0.043} />
                     <meshBasicMaterial
-                      color="#3FA4CE"
+                      color="#91d2f1"
                       transparent
-                      opacity={0.6}
+                      opacity={0.8}
                     />
                   </mesh>
                 )}
@@ -333,7 +333,7 @@ export function VRCartCatalogPanel({
                   <mesh position={[0, 0, 0.015]}>
                     <RoundedPlane width={cardWidth} height={cardHeight} radius={0.04} />
                     <meshBasicMaterial
-                      color="#1E293B"
+                      color="#5d7e9e"
                       transparent
                       opacity={0.5}
                     />
@@ -369,7 +369,7 @@ export function VRCartCatalogPanel({
                   <Text
                     position={[0, 0.1, 0.02]}
                     fontSize={0.08}
-                    color="#66B9E2"
+                    color="#e3eefb"
                     anchorX="center"
                     anchorY="middle"
                   >
@@ -427,7 +427,7 @@ export function VRCartCatalogPanel({
                       !isCompatible
                         ? "#64748B"
                         : isPlacedInScene
-                          ? "#3FA4CE"
+                          ? "#d1e2ea"
                           : "#0369A1"
                     }
                     anchorX="center"
@@ -442,7 +442,7 @@ export function VRCartCatalogPanel({
           })}
 
           {totalPages > 1 && (
-            <group position={[0, -panelHeight / 2 + bottomPadding + pagerHeight * 0.45, 0.02]}>
+            <group position={[0, -panelHeight / 2 + bottomPadding + pagerHeight * 0.2, 0.02]}>
               <group
                 position={[-0.32, 0, 0]}
                 onPointerEnter={(e) => {
@@ -459,11 +459,11 @@ export function VRCartCatalogPanel({
                 }}
               >
                 <mesh>
-                  <RoundedPlane width={0.14} height={0.07} radius={0.02} />
+                  <RoundedPlane width={0.11} height={0.055} radius={0.015} />
                   <meshStandardMaterial
                     color={
                       safePage === 0
-                        ? "#CBD5E1"
+                        ? "#edf5fb"
                         : hoveredButton === "prev"
                           ? "#475569"
                           : "#334155"
@@ -473,8 +473,8 @@ export function VRCartCatalogPanel({
                 </mesh>
                 <Text
                   position={[0, 0.005, 0.01]}
-                  fontSize={0.028}
-                  color={safePage === 0 ? "#94A3B8" : "#fff"}
+                  fontSize={0.022}
+                  color={safePage === 0 ? "#295061" : "#e8eef1"}
                   anchorX="center"
                   anchorY="middle"
                   fontWeight="600"
@@ -485,7 +485,7 @@ export function VRCartCatalogPanel({
 
               <Text
                 position={[0, -0.008, 0.01]}
-                fontSize={0.026}
+                fontSize={0.022}
                 color="#475569"
                 anchorX="center"
                 anchorY="middle"
@@ -511,11 +511,11 @@ export function VRCartCatalogPanel({
                 }}
               >
                 <mesh>
-                  <RoundedPlane width={0.14} height={0.07} radius={0.02} />
+                  <RoundedPlane width={0.11} height={0.055} radius={0.015} />
                   <meshStandardMaterial
                     color={
                       safePage >= totalPages - 1
-                        ? "#CBD5E1"
+                        ? "#edf5fb"
                         : hoveredButton === "next"
                           ? "#475569"
                           : "#334155"
@@ -525,8 +525,8 @@ export function VRCartCatalogPanel({
                 </mesh>
                 <Text
                   position={[0, 0.005, 0.01]}
-                  fontSize={0.028}
-                  color={safePage >= totalPages - 1 ? "#94A3B8" : "#fff"}
+                  fontSize={0.022}
+                  color={safePage >= totalPages - 1 ? "#295061" : "#fff"}
                   anchorX="center"
                   anchorY="middle"
                   fontWeight="600"
