@@ -596,6 +596,40 @@ class SceneContentLogic {
     }
   }
 
+  async loadHomeById(homeId: number): Promise<void> {
+    if (!this.sceneManager) return;
+
+    try {
+      const response = await makeAuthenticatedRequest(
+        `/digitalhomes/download_digital_home/${homeId}/`,
+      );
+
+      if (response.ok) {
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+
+        const homeModel = new HomeModel(
+          String(homeId),
+          "Digital Home",
+          homeId,
+          url,
+          undefined,
+        );
+
+        await this.sceneManager.setHomeModel(homeModel);
+        this.sceneManager.updateRoomBoundaryFromHomeModel();
+        this.debugHomeModelStructure();
+        this.homeId = String(homeId);
+        this.updateState({
+          roomContextType: "digital_home",
+          displaySceneId: null,
+        });
+      }
+    } catch (error) {
+      console.error("Failed to load home by id:", error);
+    }
+  }
+
   async loadDisplaySceneAsHome(sceneId: number): Promise<boolean> {
     if (!this.sceneManager) return false;
     try {
@@ -773,7 +807,7 @@ class SceneContentLogic {
     if (this.state.roomContextType === "display_scene" && this.state.displaySceneId != null) {
       return this.state.displaySceneId;
     }
-    return this.homeId;
+    return `dh-${this.homeId}`;
   }
 
   closeCatalogPanel(): void {
@@ -793,9 +827,10 @@ class SceneContentLogic {
     }
 
     if (entry.type === "digital_home" && entry.homeId != null) {
-      this.closeCatalogPanel();
-      this.navigate?.(`/scene/${entry.homeId}`);
-      return;
+	  this.closeCatalogPanel();
+	  await this.loadHomeById(entry.homeId);
+	  this.showNotificationMessage(`Switched to: ${entry.label}`, "info");
+	  return;
     }
 
     if (entry.type === "display_scene") {
@@ -3516,10 +3551,9 @@ export function SceneContent({ homeId, digitalHome, arModeRequested }: SceneCont
                 bootstrapProduct = p;
                 const ids = (p.display_scenes_ids || []) as number[];
                 if (ids.length > 0) {
-                  const productName = (p.name as string) || "Product";
                   const entries: SceneEntry[] = ids.map((sid, idx) => ({
                     id: sid,
-                    label: `${productName} · Room ${idx + 1}`,
+                    label: `Room ${idx + 1}`,
                     type: "display_scene" as const,
                   }));
                   logic.updateState({ productDetailDefaultRooms: entries });
@@ -3920,11 +3954,7 @@ export function SceneContent({ homeId, digitalHome, arModeRequested }: SceneCont
           defaultRooms={state.productDetailDefaultRooms}
           scenes={state.sceneCatalogScenes}
           loading={state.sceneCatalogLoading}
-          currentSceneId={
-            state.roomContextType === "digital_home"
-              ? `dh-${homeId}`
-              : state.displaySceneId
-          }
+          currentSceneId={logic.getCurrentSceneIdForCatalog()}
           onSelectScene={(scene) => {
             void logic.switchScene(scene);
           }}
