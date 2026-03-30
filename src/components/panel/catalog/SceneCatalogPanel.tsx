@@ -20,7 +20,7 @@ interface VRSceneCatalogPanelProps {
 }
 
 const ITEMS_PER_ROW = 3;
-const ROWS_PER_PAGE = 2;
+const ROWS_PER_PAGE = 3;
 
 export function VRSceneCatalogPanel({
   show,
@@ -55,7 +55,7 @@ export function VRSceneCatalogPanel({
 
   React.useEffect(() => {
     const homes = scenes.filter((s) => s.type === "digital_home");
-    const homeRows = defaultRooms.length === 0 ? 3 : 2;
+    const homeRows = defaultRooms.length === 0 ? 4 : 3;
     const ipp = ITEMS_PER_ROW * homeRows;
     const tpH = Math.max(1, Math.ceil(homes.length / ipp));
     setHomePage((p) => Math.min(p, tpH - 1));
@@ -68,14 +68,14 @@ export function VRSceneCatalogPanel({
 
   const bothSections = defaultRooms.length > 0 && digitalHomes.length > 0;
   const defaultRowsPerPage = bothSections ? 1 : ROWS_PER_PAGE;
-  const homeRowsPerPage = defaultRooms.length === 0 ? 3 : 2;
+  const homeRowsPerPage = defaultRooms.length === 0 ? 4 : 3;
   const defaultItemsPerPage = ITEMS_PER_ROW * defaultRowsPerPage;
   const homeItemsPerPage = ITEMS_PER_ROW * homeRowsPerPage;
 
-  const sectionLabelHeight = 0.04;
-  const itemHeight = 0.22;
+  const sectionLabelHeight = 0.02;
+  const itemHeight = 0.19;
   const pagerHeight = 0.07;
-  const topPadding = 0.02;
+  const topPadding = 0.01;
   const headerHeight = 0.24;
   const sectionGap = 0.02;
 
@@ -119,8 +119,8 @@ export function VRSceneCatalogPanel({
   }
 
   if (defaultRooms.length > 0 && digitalHomes.length > 0) {
-    y -= sectionGap;
-  }
+    y -= sectionGap ;
+   }
 
   let homeLabelY = 0;
   let homeCardsTopY = 0;
@@ -148,8 +148,8 @@ export function VRSceneCatalogPanel({
     const hoverBot = isHome ? "#EEF8F3" : "#E6F0F7";
     const defaultTop = isHome ? "#E6F9F0" : "#DCEEFB";
     const defaultBot = isHome ? "#F0FAF5" : "#F0F2F5";
-    const activeBorder = isHome ? "#10B981" : "#3FA4CE";
-    const activeLbl = isHome ? "#065F46" : "#1E40AF";
+    const activeBorder = isHome ? "#80e8c5" : "#7abfe2";
+    const activeLbl = isHome ? "#065F46" : "#ffffff";
 
     return (
       <group key={cardKey} position={[x, y, 0.015]}>
@@ -191,7 +191,7 @@ export function VRSceneCatalogPanel({
         )}
 
         <Text
-          position={[-cardWidth / 2 + 0.035, 0.015, 0.01]}
+          position={[-cardWidth / 2 + 0.026, 0, 0.01]}
           fontSize={0.035}
           color="#334155"
           anchorX="left"
@@ -199,39 +199,21 @@ export function VRSceneCatalogPanel({
         >
           {isHome ? "\u{1F3E0}" : "\u{1F3D9}"}
         </Text>
-
         <Text
-          position={[-cardWidth / 2 + 0.1, 0.012, 0.01]}
-          fontSize={0.028}
+          position={[-cardWidth / 2 + 0.09, 0, 0.01]}
+          fontSize={0.026}
           color={isActive ? activeLbl : "#334155"}
           anchorX="left"
           anchorY="middle"
           fontWeight={isActive ? "600" : "500"}
-          maxWidth={cardWidth - 0.1}
+          maxWidth={cardWidth - 0.11}
           overflowWrap="break-word"
           textAlign="left"
         >
-          {scene.label.length > 10 ? scene.label.substring(0, 10) + "..." : scene.label}
+          {scene.label}
         </Text>
 
-        {isActive && (
-          <group position={[cardWidth / 2 - 0.13, -0.03, 0.02]}>
-            <mesh>
-              <planeGeometry args={[0.075, 0.035]} />
-              <meshStandardMaterial color="#059669" roughness={0.4} />
-            </mesh>
-            <Text
-              position={[0, 0, 0.003]}
-              fontSize={0.018}
-              color="#fff"
-              anchorX="center"
-              anchorY="middle"
-              fontWeight="600"
-            >
-              Active
-            </Text>
-          </group>
-        )}
+     
       </group>
     );
   }
@@ -247,7 +229,7 @@ export function VRSceneCatalogPanel({
     const prevId = `${sectionId}-prev`;
     const nextId = `${sectionId}-next`;
     return (
-      <group position={[0, centerY, 0.02]}>
+      <group position={[0, centerY+0.01, 0.02]}>
         <group
           position={[-0.28, 0, 0]}
           onPointerEnter={(e) => {
@@ -268,7 +250,7 @@ export function VRSceneCatalogPanel({
             <meshStandardMaterial
               color={
                 safePage === 0
-                  ? "#CBD5E1"
+                  ? "#ffffff"
                   : pagerHover === prevId
                     ? "#475569"
                     : "#334155"
@@ -279,7 +261,7 @@ export function VRSceneCatalogPanel({
           <Text
             position={[0, 0.005, 0.01]}
             fontSize={0.022}
-            color={safePage === 0 ? "#94A3B8" : "#fff"}
+            color={safePage === 0 ? "#295061" : "#fff"}
             anchorX="center"
             anchorY="middle"
             fontWeight="600"
@@ -320,7 +302,7 @@ export function VRSceneCatalogPanel({
             <meshStandardMaterial
               color={
                 safePage >= totalPages - 1
-                  ? "#CBD5E1"
+                  ? "#ffffff"
                   : pagerHover === nextId
                     ? "#475569"
                     : "#334155"
@@ -331,7 +313,7 @@ export function VRSceneCatalogPanel({
           <Text
             position={[0, 0.005, 0.01]}
             fontSize={0.022}
-            color={safePage >= totalPages - 1 ? "#94A3B8" : "#fff"}
+            color={safePage >= totalPages - 1 ? "#295061" : "#fff"}
             anchorX="center"
             anchorY="middle"
             fontWeight="600"
@@ -363,8 +345,8 @@ export function VRSceneCatalogPanel({
     return (
       <>
         <Text
-          position={[-(panelWidth / 2) + 0.08, labelY, 0.01]}
-          fontSize={0.022}
+          position={[-(panelWidth / 2) + 0.08, labelY+0.03, 0.01]}
+          fontSize={0.024}
           color="#64748B"
           anchorX="left"
           anchorY="middle"
@@ -448,7 +430,7 @@ export function VRSceneCatalogPanel({
         </Text>
       </group>
 
-      <mesh position={[0, panelHeight / 2 - 0.2, 0.01]}>
+      <mesh position={[0, panelHeight / 2 - 0.18, 0.01]}>
         <planeGeometry args={[panelWidth - 0.12, 0.004]} />
         <meshBasicMaterial color="#A5D1E7" />
       </mesh>
