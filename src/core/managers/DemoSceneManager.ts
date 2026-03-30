@@ -43,6 +43,14 @@ export class DemoSceneManager {
     return this.product;
   }
 
+  clearProduct(): void {
+    if (!this.product) return;
+
+    this.scene.remove(this.product.getGroup());
+    this.product.dispose();
+    this.product = null;
+  }
+
   moveProduct(delta: THREE.Vector3): void {
     if (!this.product) return;
     

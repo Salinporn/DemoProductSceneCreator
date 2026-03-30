@@ -35,6 +35,7 @@ interface DemoState {
   activePanel: "scenes" | "instructions" | "cart" | null;
   currentProductId: string;
   currentSceneId: string | null;
+  defaultRooms: SceneEntry[];
   scenes: SceneEntry[];
   scenesLoading: boolean;
   cartProducts: CartProduct[];
@@ -74,6 +75,7 @@ class DemoSceneLogic {
       activePanel: null,
       currentProductId: productId,
       currentSceneId: sceneId,
+      defaultRooms: [],
       scenes: [],
       scenesLoading: true,
       cartProducts: [],
@@ -282,7 +284,8 @@ class DemoSceneLogic {
         loading: false,
         productScale: 1.0,
         productRotationY: 0,
-        scenes: allScenes,
+        defaultRooms: productScenes,
+        scenes: homeScenes,
         scenesLoading: false,
         currentSceneId: initialSceneId,
       });
@@ -618,7 +621,7 @@ export function DemoSceneContent({
       <HeadLockedUI distance={1.5} horizontalOffset={0.05} verticalOffset={0} enabled={showScenesPanel}>
         <VRSceneCatalogPanel
           show={showScenesPanel}
-          defaultRooms={[]}
+          defaultRooms={state.defaultRooms}
           scenes={state.scenes}
           loading={state.scenesLoading}
           currentSceneId={state.currentSceneId}
