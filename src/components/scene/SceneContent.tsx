@@ -2319,7 +2319,7 @@ class SceneContentLogic {
     delta: THREE.Vector3,
   ): Promise<void> {
     if (!this.sceneManager) return;
-    if (this.state.preciseCheckInProgress || this.state.awaitingCollisionAck || this.state.showPreciseCheckPanel || this.state.showMoveCloserPanel) return;
+    if (this.state.preciseCheckInProgress || this.state.awaitingCollisionAck || this.state.showPreciseCheckPanel) return;
 
     const furniture = this.sceneManager.getFurniture(id);
     if (!furniture || furniture.isWallpaper?.()) return;
@@ -2371,7 +2371,7 @@ class SceneContentLogic {
     deltaHorizontal: number,
   ): Promise<void> {
     if (!this.sceneManager) return;
-    if (this.state.preciseCheckInProgress || this.state.awaitingCollisionAck || this.state.showPreciseCheckPanel || this.state.showMoveCloserPanel) return;
+    if (this.state.preciseCheckInProgress || this.state.awaitingCollisionAck || this.state.showPreciseCheckPanel) return;
 
     const furniture = this.sceneManager.getFurniture(id);
     if (!furniture || !furniture.isOnWall()) return;
@@ -2384,8 +2384,7 @@ class SceneContentLogic {
     );
 
     if (!result.success && result.needsConfirmation) {
-      const newPos = furniture.moveAlongWall(deltaVertical, deltaHorizontal);
-      this.pendingMove = newPos;
+      this.pendingMove = furniture.getPosition();
       this.updateState({ showMoveCloserPanel: true });
     } else if (result.success && result.needsPreciseCheck) {
       const newPos = furniture.getPosition();
@@ -2474,6 +2473,23 @@ class SceneContentLogic {
   }
 
   handleCancelMoveCloser(): void {
+    if (this.state.selectedItemId && this.sceneManager) {
+      const lastValid = this.sceneManager.getLastValidPosition(this.state.selectedItemId);
+      if (lastValid) {
+        const furniture = this.sceneManager.getFurniture(this.state.selectedItemId);
+        if (furniture) {
+          furniture.setPosition(lastValid);
+          const collisionDetector = this.sceneManager.getCollisionDetector();
+          collisionDetector.updateFurnitureBox(
+            this.state.selectedItemId,
+            furniture.getGroup(),
+            furniture.getModelId(),
+          );
+          furniture.setCollision(false);
+        }
+        this.sceneManager.refreshDeployedSpatialSnapshotFromLive(this.state.selectedItemId);
+      }
+    }
     this.updateState({ showMoveCloserPanel: false });
     this.pendingMove = null;
   }
@@ -3170,7 +3186,7 @@ class SceneContentLogic {
       });
       return;
     }
-    if (this.state.preciseCheckInProgress || this.state.awaitingCollisionAck || this.state.showPreciseCheckPanel || this.state.showMoveCloserPanel) return;
+    if (this.state.preciseCheckInProgress || this.state.awaitingCollisionAck || this.state.showPreciseCheckPanel) return;
 
     const furniture = this.sceneManager.getFurniture(this.state.selectedItemId);
     if (furniture?.isWallpaper?.()) return;
@@ -3223,7 +3239,7 @@ class SceneContentLogic {
 }
 
   handleRotationSliderChange(newRotation: number): void {
-    if (this.state.preciseCheckInProgress || this.state.awaitingCollisionAck || this.state.showPreciseCheckPanel || this.state.showMoveCloserPanel) return;
+    if (this.state.preciseCheckInProgress || this.state.awaitingCollisionAck || this.state.showPreciseCheckPanel) return;
     this.updateState({ rotationValue: newRotation });
     if (this.state.selectedItemId && this.sceneManager) {
       const furniture = this.sceneManager.getFurniture(
