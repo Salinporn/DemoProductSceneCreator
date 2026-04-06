@@ -672,7 +672,6 @@ export class SceneManager {
           furniture.setPosition(newPosition);
           furniture.setCollision(false);
           this.collisionDetector.updateFurnitureBox(id, furniture.getGroup(), furniture.getModelId());
-          this.lastValidPositions.set(id, newPosition);
       }
 
        // Check if object is in the air
@@ -689,12 +688,10 @@ export class SceneManager {
             furniture.setPosition(newPosition);
             furniture.setFloating(false);
             this.collisionDetector.updateFurnitureBox(id, furniture.getGroup(), furniture.getModelId());
-            this.lastValidPositions.set(id, newPosition);
           } else {
             furniture.setPosition(newPosition);
             furniture.setFloating(true);
             this.collisionDetector.updateFurnitureBox(id, furniture.getGroup(), furniture.getModelId());
-            this.lastValidPositions.set(id, newPosition);
             return { success: false, needsConfirmation: false, needsPreciseCheck: false };
           }
         } else {
@@ -708,14 +705,12 @@ export class SceneManager {
     const hasAABBCollision = this.collisionDetector.checkAABBCollisionOnly(id);
     
     if (hasAABBCollision && !skipAABBBlock) {
-      furniture.setPosition(originalPosition);
-      this.collisionDetector.updateFurnitureBox(id, furniture.getGroup(), furniture.getModelId());
       furniture.setCollision(true);
-      return { 
-        success: false, 
-        needsConfirmation: true, 
+      return {
+        success: false,
+        needsConfirmation: true,
         needsPreciseCheck: false,
-        reason: 'Close to another object' 
+        reason: 'Close to another object'
       };
     }
     
@@ -979,8 +974,6 @@ export class SceneManager {
         const hasAABBCollision = this.collisionDetector.checkAABBCollisionOnly(id);
 
         if (hasAABBCollision) {
-          furniture.setPosition(currentPosition);
-          this.collisionDetector.updateFurnitureBox(id, furniture.getGroup(), furniture.getModelId());
           furniture.setCollision(true);
           return {
             success: false,
